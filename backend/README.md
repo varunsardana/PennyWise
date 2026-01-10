@@ -1,4 +1,5 @@
 # PennyWise Backend (Receipt Story)
+Aliza Samad
 
 ## Run (local)
 
