@@ -25,3 +25,4 @@ class Receipt(Base):
         nullable=False,
         default=lambda: datetime.now(timezone.utc).isoformat(timespec="seconds")
     )
+
