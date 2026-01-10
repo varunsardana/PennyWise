@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict
 
+
 class ReceiptItem(BaseModel):
     description: str
     quantity: Optional[float] = None
@@ -20,6 +21,11 @@ class ReceiptExtraction(BaseModel):
 
 class ReceiptPreview(ReceiptExtraction):
     category: str = Field(..., description="Assigned category (Coffee, Groceries, etc.)")
+
+class ScanReceiptResponse(BaseModel):
+    receipt_id: str
+    preview: ReceiptPreview
+
 
 class SaveReceiptRequest(ReceiptPreview):
     pass
