@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from receipt_story.db.tables import Receipt
 
 def compute_insights(db: Session, range_name: str = "week"):
+    # MVP: ignore real date filtering; compute over all stored receipts.
     receipts = db.query(Receipt).all()
 
     spend_by_category = defaultdict(float)
