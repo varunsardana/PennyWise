@@ -208,5 +208,5 @@ __marimo__/
 
 # Backend runtime
 backend/.env
-backend/data/recepits.db
+backend/data/receipts.db
 backend/.venv/
