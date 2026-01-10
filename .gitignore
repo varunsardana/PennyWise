@@ -208,5 +208,6 @@ __marimo__/
 
 # Backend runtime
 backend/.env
-backend/data/receipts.db
+backend/data/*
+!backend/data/.gitkeep 
 backend/.venv/
