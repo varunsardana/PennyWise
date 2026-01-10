@@ -1,5 +1,8 @@
 # PennyWise Backend (Receipt Story)
 
+# Created by Varun Sardana, Aliza Samad, Nikita Sharma, Rohil Jain
+# An app to make today's spenders into tomorrow's savers
+
 ## Run (local)
 
 ```bash
