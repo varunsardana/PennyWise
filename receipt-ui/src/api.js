@@ -65,6 +65,16 @@ export async function deleteReceipt(receiptId) {
   return await res.json();
 }
 
+export async function updateReceipt(receiptId, payload) {
+  const res = await fetch(`${API_BASE}/receipts/${encodeURIComponent(receiptId)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`Update failed (${res.status})`);
+  return await res.json();
+}
+
 export async function sendChatMessage(message, conversationHistory = null, lastBudgetContext = null, extra = {}) {
   const res = await fetch(`${API_BASE}/message`, {
     method: "POST",
