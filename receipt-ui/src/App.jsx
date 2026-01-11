@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { parseReceipt, saveReceipt, listReceipts, getInsights, getTrends, getChartsData, deleteReceipt, sendChatMessage } from "./api";
+import { parseReceipt, saveReceipt, listReceipts, getInsights, getTrends, getChartsData, deleteReceipt, updateReceipt, sendChatMessage } from "./api";
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -64,6 +64,34 @@ export default function App() {
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [openMenuId, setOpenMenuId] = useState(null);  // Track which receipt menu is open
+  const [editingReceipt, setEditingReceipt] = useState(null);  // Receipt being edited
+  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);  // For custom dropdown
+  const [editCategoryDropdownOpen, setEditCategoryDropdownOpen] = useState(false);  // For edit modal dropdown
+  const [chatWidth, setChatWidth] = useState(520);  // Draggable chat width
+  const [isResizing, setIsResizing] = useState(false);
+  const [hasResized, setHasResized] = useState(false);  // Track if user manually resized
+
+  const CATEGORIES = ["Groceries", "Dining", "Gas", "Shopping", "Entertainment", "Healthcare", "Travel", "Utilities", "Other"];
+
+  // Handle chat panel resize
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (!isResizing) return;
+      const newWidth = window.innerWidth - e.clientX;
+      setChatWidth(Math.max(300, Math.min(1000, newWidth)));
+      setHasResized(true);
+    };
+    const handleMouseUp = () => setIsResizing(false);
+
+    if (isResizing) {
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+    }
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isResizing]);
 
   // Function to send chat message to backend
   async function handleSendChat() {
@@ -192,7 +220,7 @@ export default function App() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
+    <div className="h-screen flex flex-col bg-gray-50 transition-all duration-300" style={{ marginRight: chatOpen && hasResized ? chatWidth : 0 }}>
       {/* Top bar - fixed */}
       <div className="flex-shrink-0 border-b border-gray-200 bg-white/80 backdrop-blur">
         <div className="mx-auto max-w-3xl px-6 py-4">
@@ -291,56 +319,180 @@ export default function App() {
                 </div>
 
                 <div className="mt-5 grid grid-cols-2 gap-4">
-                  <StatCard label="Merchant" value={preview.merchant || "—"} />
-                  <StatCard label="Date" value={preview.date || "—"} />
-                  <StatCard label="Total" value={<Money v={preview.total} />} />
-                  <StatCard label="Tax" value={<Money v={preview.tax} />} />
-                  <StatCard label="Subtotal" value={<Money v={preview.subtotal} />} />
-                  <StatCard label="Category" value={preview.category || "—"} />
+                  <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                    <label className="text-base font-medium text-gray-500">Merchant</label>
+                    <input
+                      type="text"
+                      value={preview.merchant || ""}
+                      onChange={(e) => setPreview({ ...preview, merchant: e.target.value })}
+                      className="mt-1 w-full text-xl font-semibold text-gray-900 bg-transparent border-b border-gray-200 focus:border-violet-500 focus:outline-none"
+                    />
+                  </div>
+                  <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                    <label className="text-base font-medium text-gray-500">Date</label>
+                    <input
+                      type="text"
+                      value={preview.date || ""}
+                      onChange={(e) => setPreview({ ...preview, date: e.target.value })}
+                      placeholder="YYYY-MM-DD"
+                      className="mt-1 w-full text-xl font-semibold text-gray-900 bg-transparent border-b border-gray-200 focus:border-violet-500 focus:outline-none"
+                    />
+                  </div>
+                  <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                    <label className="text-base font-medium text-gray-500">Total</label>
+                    <div className="flex items-center mt-1">
+                      <span className="text-xl font-semibold text-gray-900">$</span>
+                      <input
+                        type="text" inputMode="decimal"
+                                                value={preview.total || ""}
+                        onChange={(e) => setPreview({ ...preview, total: parseFloat(e.target.value) || 0 })}
+                        className="w-full text-xl font-semibold text-gray-900 bg-transparent border-b border-gray-200 focus:border-violet-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                    <label className="text-base font-medium text-gray-500">Tax</label>
+                    <div className="flex items-center mt-1">
+                      <span className="text-xl font-semibold text-gray-900">$</span>
+                      <input
+                        type="text" inputMode="decimal"
+                                                value={preview.tax || ""}
+                        onChange={(e) => setPreview({ ...preview, tax: parseFloat(e.target.value) || 0 })}
+                        className="w-full text-xl font-semibold text-gray-900 bg-transparent border-b border-gray-200 focus:border-violet-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                    <label className="text-base font-medium text-gray-500">Subtotal</label>
+                    <div className="flex items-center mt-1">
+                      <span className="text-xl font-semibold text-gray-900">$</span>
+                      <input
+                        type="text" inputMode="decimal"
+                                                value={preview.subtotal || ""}
+                        onChange={(e) => setPreview({ ...preview, subtotal: parseFloat(e.target.value) || 0 })}
+                        className="w-full text-xl font-semibold text-gray-900 bg-transparent border-b border-gray-200 focus:border-violet-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm relative">
+                    <label className="text-base font-medium text-gray-500">Category</label>
+                    <button
+                      type="button"
+                      onClick={() => setCategoryDropdownOpen(!categoryDropdownOpen)}
+                      className="mt-1 w-full text-xl font-semibold text-gray-900 bg-transparent border-b border-gray-200 focus:border-violet-500 focus:outline-none text-left flex items-center justify-between py-1"
+                    >
+                      <span>{preview.category || "Select category"}</span>
+                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    {categoryDropdownOpen && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setCategoryDropdownOpen(false)} />
+                        <div className="absolute left-0 right-0 bottom-full mb-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 overflow-hidden max-h-64 overflow-y-auto">
+                          {CATEGORIES.map((cat) => (
+                            <button
+                              key={cat}
+                              type="button"
+                              onClick={() => {
+                                setPreview({ ...preview, category: cat });
+                                setCategoryDropdownOpen(false);
+                              }}
+                              className={cn(
+                                "w-full px-4 py-3 text-left text-base hover:bg-violet-50 transition",
+                                preview.category === cat ? "bg-violet-100 text-violet-700 font-medium" : "text-gray-700"
+                              )}
+                            >
+                              {cat}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
 
                 <div className="mt-5">
                   <div className="text-base font-medium text-gray-500">Items</div>
-                  <div className="mt-3 space-y-3">
+                  <div className="mt-3 space-y-2">
                     {(preview.items || []).length ? (
                       preview.items.map((it, idx) => (
                         <div
                           key={idx}
-                          className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50 px-4 py-3"
+                          className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3"
                         >
-                          <div className="text-base text-gray-900">{it.description}</div>
-                          <div className="text-base text-gray-500">
-                            {it.total_price != null ? <Money v={it.total_price} /> : ""}
+                          <input
+                            type="text"
+                            value={it.description || ""}
+                            onChange={(e) => {
+                              const newItems = [...preview.items];
+                              newItems[idx] = { ...newItems[idx], description: e.target.value };
+                              setPreview({ ...preview, items: newItems });
+                            }}
+                            placeholder="Item name"
+                            className="flex-1 text-base text-gray-900 bg-transparent focus:outline-none"
+                          />
+                          <div className="flex items-center text-gray-500">
+                            <span>$</span>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={it.total_price || ""}
+                              onChange={(e) => {
+                                const newItems = [...preview.items];
+                                newItems[idx] = { ...newItems[idx], total_price: parseFloat(e.target.value) || 0 };
+                                setPreview({ ...preview, items: newItems });
+                              }}
+                              placeholder="0.00"
+                              className="w-16 text-base text-gray-900 bg-transparent focus:outline-none text-right"
+                            />
                           </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newItems = preview.items.filter((_, i) => i !== idx);
+                              setPreview({ ...preview, items: newItems });
+                            }}
+                            className="text-gray-300 hover:text-red-500"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
                         </div>
                       ))
                     ) : (
                       <div className="text-base text-gray-400">No line items detected.</div>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newItems = [...(preview.items || []), { description: "", total_price: 0 }];
+                        setPreview({ ...preview, items: newItems });
+                      }}
+                      className="w-full py-3 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 text-base font-medium text-gray-500 hover:border-violet-400 hover:bg-violet-50 hover:text-violet-600 transition"
+                    >
+                      + Add Item
+                    </button>
                   </div>
                 </div>
 
-                <div className="mt-6 flex gap-3">
+                <div className="mt-6">
                   <button
-                    onClick={onSave}
+                    onClick={async () => {
+                      await onSave();
+                      setTab("history");
+                    }}
                     disabled={!canSave || loading}
                     className={cn(
-                      "flex-1 rounded-2xl px-6 py-4 text-base font-semibold text-white shadow-lg transition-all duration-200",
+                      "w-full rounded-2xl px-6 py-4 text-base font-semibold text-white shadow-lg transition-all duration-200",
                       !canSave || loading
                         ? "bg-gray-300 cursor-not-allowed"
-                        : "bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 hover:shadow-xl hover:scale-[1.02]"
+                        : "bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 hover:shadow-xl hover:scale-[1.02]"
                     )}
                     type="button"
                   >
-                    {loading ? "Saving..." : "Save to History"}
-                  </button>
-
-                  <button
-                    onClick={() => setTab("history")}
-                    className="rounded-2xl border-2 border-gray-200 bg-white px-6 py-4 text-base font-semibold text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition-all duration-200"
-                    type="button"
-                  >
-                    View History →
+                    {loading ? "Saving..." : "Confirm & Save Receipt"}
                   </button>
                 </div>
 
@@ -411,12 +563,13 @@ export default function App() {
                     </button>
                     {/* Dropdown menu */}
                     {openMenuId === r.id && (
-                      <div className="absolute right-0 top-full mt-1 w-32 bg-white border border-gray-200 rounded-xl shadow-lg z-10 overflow-hidden">
+                      <>
+                      <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)} />
+                      <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 w-32 bg-white border border-gray-200 rounded-xl shadow-lg z-[60] overflow-hidden">
                         <button
                           onClick={() => {
-                            // TODO: Edit functionality - teammate can implement
+                            setEditingReceipt({ ...r });
                             setOpenMenuId(null);
-                            alert("Edit feature coming soon!");
                           }}
                           className="w-full px-4 py-3 text-left text-base text-gray-700 hover:bg-gray-50"
                           type="button"
@@ -439,6 +592,7 @@ export default function App() {
                           Delete
                         </button>
                       </div>
+                      </>
                     )}
                   </div>
                 </div>
@@ -573,7 +727,7 @@ export default function App() {
                 {/* Summary Stats */}
                 <div className="grid grid-cols-2 gap-3">
                   <StatCard
-                    label="Total Spend"
+                    label="Total Spending"
                     value={`$${Number(trends.total_spend).toFixed(2)}`}
                   />
                   <StatCard
@@ -715,7 +869,7 @@ export default function App() {
                     <ResponsiveContainer width="100%" height={Math.max(200, chartsData.top_merchants.length * 40)}>
                       <BarChart data={chartsData.top_merchants} layout="vertical">
                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                        <XAxis type="number" tick={{ fontSize: 12 }} tickFormatter={(v) => `$${v}`} />
+                        <XAxis type="text" inputMode="decimal" tick={{ fontSize: 12 }} tickFormatter={(v) => `$${v}`} />
                         <YAxis type="category" dataKey="merchant" tick={{ fontSize: 12 }} width={100} />
                         <Tooltip
                           formatter={(value, name) => [`$${Number(value).toFixed(2)}`, "Total"]}
@@ -812,13 +966,142 @@ export default function App() {
         </div>
       </div>
 
+      {/* Edit Receipt Modal */}
+      {editingReceipt && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl overflow-visible">
+            <div className="text-xl font-semibold text-gray-900 mb-4">Edit Receipt</div>
+
+            <div className="space-y-4 overflow-visible">
+              <div>
+                <label className="text-base font-medium text-gray-500">Merchant</label>
+                <input
+                  type="text"
+                  value={editingReceipt.merchant || ""}
+                  onChange={(e) => setEditingReceipt({ ...editingReceipt, merchant: e.target.value })}
+                  className="mt-1 w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-base focus:outline-none focus:border-violet-500"
+                />
+              </div>
+              <div>
+                <label className="text-base font-medium text-gray-500">Date</label>
+                <input
+                  type="text"
+                  value={editingReceipt.date || ""}
+                  onChange={(e) => setEditingReceipt({ ...editingReceipt, date: e.target.value })}
+                  placeholder="YYYY-MM-DD"
+                  className="mt-1 w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-base focus:outline-none focus:border-violet-500"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-base font-medium text-gray-500">Total</label>
+                  <input
+                    type="text" inputMode="decimal"
+                                        value={editingReceipt.total || ""}
+                    onChange={(e) => setEditingReceipt({ ...editingReceipt, total: parseFloat(e.target.value) || 0 })}
+                    className="mt-1 w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-base focus:outline-none focus:border-violet-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-base font-medium text-gray-500">Tax</label>
+                  <input
+                    type="text" inputMode="decimal"
+                                        value={editingReceipt.tax || ""}
+                    onChange={(e) => setEditingReceipt({ ...editingReceipt, tax: parseFloat(e.target.value) || 0 })}
+                    className="mt-1 w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-base focus:outline-none focus:border-violet-500"
+                  />
+                </div>
+              </div>
+              <div className="overflow-visible">
+                <label className="text-base font-medium text-gray-500">Category</label>
+                <button
+                  type="button"
+                  onClick={() => setEditCategoryDropdownOpen(!editCategoryDropdownOpen)}
+                  className="mt-1 w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-base focus:outline-none focus:border-violet-500 text-left flex items-center justify-between bg-white overflow-visible"
+                >
+                  <span className={editingReceipt.category ? "text-gray-900" : "text-gray-400"}>
+                    {editingReceipt.category || "Select category"}
+                  </span>
+                  <div className="relative">
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                    {editCategoryDropdownOpen && (
+                      <div className="absolute left-full top-1/2 -translate-y-1/2 ml-4 bg-white border border-gray-200 rounded-xl shadow-lg z-[100] max-h-64 overflow-y-auto w-40">
+                        {CATEGORIES.map((cat) => (
+                          <button
+                            key={cat}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingReceipt({ ...editingReceipt, category: cat });
+                              setEditCategoryDropdownOpen(false);
+                            }}
+                            className={cn(
+                              "w-full px-4 py-3 text-left text-base hover:bg-violet-50 transition",
+                              editingReceipt.category === cat ? "bg-violet-100 text-violet-700 font-medium" : "text-gray-700"
+                            )}
+                          >
+                            {cat}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </button>
+                {editCategoryDropdownOpen && (
+                  <div className="fixed inset-0 z-[99]" onClick={() => setEditCategoryDropdownOpen(false)} />
+                )}
+              </div>
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={async () => {
+                  try {
+                    await updateReceipt(editingReceipt.id, {
+                      merchant: editingReceipt.merchant,
+                      date: editingReceipt.date,
+                      total: editingReceipt.total,
+                      tax: editingReceipt.tax,
+                      category: editingReceipt.category,
+                    });
+                    setReceipts(receipts.map(r => r.id === editingReceipt.id ? editingReceipt : r));
+                    setEditingReceipt(null);
+                  } catch (e) {
+                    setErr(e.message);
+                  }
+                }}
+                className="flex-1 rounded-xl px-6 py-3 text-base font-semibold text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 transition-all shadow-md"
+                type="button"
+              >
+                Save Changes
+              </button>
+              <button
+                onClick={() => setEditingReceipt(null)}
+                className="rounded-xl px-6 py-3 text-base font-semibold text-gray-700 border-2 border-gray-200 hover:bg-gray-50 transition-all"
+                type="button"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Chat Panel - slides in from right */}
       <div
         className={cn(
-          "fixed top-0 right-0 h-full w-[520px] bg-white border-l border-gray-200 shadow-xl transition-transform duration-300 z-50 flex flex-col",
+          "fixed top-0 right-0 h-full bg-white border-l border-gray-200 shadow-xl transition-transform duration-300 z-50 flex flex-col",
           chatOpen ? "translate-x-0" : "translate-x-full"
         )}
+        style={{ width: chatWidth }}
       >
+        {/* Drag handle */}
+        <div
+          className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-violet-400 active:bg-violet-500 transition-colors z-10"
+          onMouseDown={() => setIsResizing(true)}
+        />
         {/* Chat Header with close arrow */}
         <div className="flex items-center justify-between p-5 border-b border-gray-200">
           <div className="text-xl font-semibold text-gray-900">Chat Assistant</div>
@@ -864,16 +1147,24 @@ export default function App() {
         {/* Chat Input */}
         <div className="p-5 border-t border-gray-200">
           <div className="flex gap-3">
-            <input
-              type="text"
+            <textarea
               value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
+              onChange={(e) => {
+                setChatInput(e.target.value);
+                e.target.style.height = "auto";
+                e.target.style.height = Math.min(e.target.scrollHeight, 150) + "px";
+              }}
               placeholder="Type a message..."
-              className="flex-1 rounded-2xl border-2 border-gray-200 px-5 py-4 text-base focus:outline-none focus:border-violet-400"
+              className="flex-1 rounded-2xl border-2 border-gray-200 px-5 py-4 text-base focus:outline-none focus:border-violet-400 resize-none overflow-hidden"
               onKeyDown={(e) => {
-                if (e.key === "Enter") handleSendChat();
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSendChat();
+                }
               }}
               disabled={chatLoading}
+              rows={1}
+              style={{ minHeight: "56px", maxHeight: "150px" }}
             />
             <button
               onClick={handleSendChat}

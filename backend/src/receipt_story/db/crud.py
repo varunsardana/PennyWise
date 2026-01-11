@@ -21,3 +21,22 @@ def delete_receipt(db: Session, receipt_id: str) -> bool:
         db.commit()
         return True
     return False
+
+
+def update_receipt(db: Session, receipt_id: str, merchant: str = None, date: str = None, total: float = None, tax: float = None, category: str = None) -> Receipt:
+    rec = db.query(Receipt).filter(Receipt.id == receipt_id).first()
+    if not rec:
+        return None
+    if merchant is not None:
+        rec.merchant = merchant
+    if date is not None:
+        rec.date = date
+    if total is not None:
+        rec.total = total
+    if tax is not None:
+        rec.tax = tax
+    if category is not None:
+        rec.category = category
+    db.commit()
+    db.refresh(rec)
+    return rec
