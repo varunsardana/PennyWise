@@ -41,3 +41,18 @@ export async function getInsights(range = "week") {
   if (!res.ok) throw new Error(`Insights failed (${res.status})`);
   return await res.json();
 }
+
+export async function getTrends(period = "weekly", startDate = null, endDate = null) {
+  let url = `${API_BASE}/trends?period=${encodeURIComponent(period)}`;
+  if (startDate) url += `&start_date=${encodeURIComponent(startDate)}`;
+  if (endDate) url += `&end_date=${encodeURIComponent(endDate)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Trends failed (${res.status})`);
+  return await res.json();
+}
+
+export async function getChartsData(period = "all") {
+  const res = await fetch(`${API_BASE}/trends/charts?period=${encodeURIComponent(period)}`);
+  if (!res.ok) throw new Error(`Charts failed (${res.status})`);
+  return await res.json();
+}
