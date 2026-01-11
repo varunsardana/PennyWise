@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { parseReceipt, saveReceipt, listReceipts, getInsights, getTrends, getChartsData, deleteReceipt, updateReceipt, sendChatMessage } from "./api";
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip,
@@ -64,6 +64,7 @@ export default function App() {
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [openMenuId, setOpenMenuId] = useState(null);  // Track which receipt menu is open
+  const [lastBudgetContext, setLastBudgetContext] = useState(null);
   const [editingReceipt, setEditingReceipt] = useState(null);  // Receipt being edited
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);  // For custom dropdown
   const [editCategoryDropdownOpen, setEditCategoryDropdownOpen] = useState(false);  // For edit modal dropdown
@@ -93,33 +94,76 @@ export default function App() {
     };
   }, [isResizing]);
 
-  // Function to send chat message to backend
-  async function handleSendChat() {
-    if (!chatInput.trim() || chatLoading) return;
+// inside your component
+const lastBudgetContextRef = useRef(null); // keeps latest budget context instantly
 
-    const userMessage = chatInput.trim();
-    setChatInput("");
+async function handleSendChat() {
+  if (!chatInput.trim() || chatLoading) return;
 
-    // Add user message to chat
-    const newMessages = [...chatMessages, { role: "user", content: userMessage }];
-    setChatMessages(newMessages);
-    setChatLoading(true);
+  const userMessage = chatInput.trim();
+  setChatInput("");
 
-    try {
-      // Build conversation history for context
-      const history = newMessages.map(m => ({ role: m.role, content: m.content }));
+  // Add user message to chat
+  const newMessages = [...chatMessages, { role: "user", content: userMessage }];
+  setChatMessages(newMessages);
+  setChatLoading(true);
 
-      const response = await sendChatMessage(userMessage, history);
+  try {
+    // Build conversation history for context
+    const history = newMessages.map(m => ({ role: m.role, content: m.content }));
 
-      // Add bot response to chat
-      setChatMessages([...newMessages, { role: "assistant", content: response.response }]);
-    } catch (e) {
-      // Add error message
-      setChatMessages([...newMessages, { role: "assistant", content: "Sorry, I encountered an error. Please try again." }]);
-    } finally {
-      setChatLoading(false);
+    console.log("Sending budget context:", lastBudgetContextRef.current);
+
+    // Send message to backend with the most up-to-date budget context
+    const response = await sendChatMessage(userMessage, history, lastBudgetContextRef.current);
+
+    // Handle response types
+    if (response.type === "budget_status" && response.has_budget) {
+      // Save context immediately in ref
+      lastBudgetContextRef.current = response;
+      setLastBudgetContext(response); // also keep state for UI rendering
+
+      setChatMessages(prev => [
+        ...newMessages,
+        { role: "assistant", content: "budget_status", data: response }
+      ]);
+
+    } else if (response.type === "budget_refine") {
+      // Update context if backend returns updated budget
+      if (response.success && response.data) {
+        lastBudgetContextRef.current = response.data;
+        setLastBudgetContext(response.data);
+      }
+
+      setChatMessages(prev => [
+        ...newMessages,
+        { role: "assistant", content: "planning", data: response }
+      ]);
+
+    } else if (response.type === "planning" || response.type === "planning_refine") {
+      setChatMessages(prev => [
+        ...newMessages,
+        { role: "assistant", content: "planning", data: response }
+      ]);
+
+    } else {
+      // Default response
+      setChatMessages(prev => [
+        ...newMessages,
+        { role: "assistant", content: response.response || "Sorry, I don't understand." }
+      ]);
     }
+
+  } catch (e) {
+    setChatMessages(prev => [
+      ...newMessages,
+      { role: "assistant", content: `Error: ${e.message}` }
+    ]);
+  } finally {
+    setChatLoading(false);
   }
+}
+
 
   // Colors for pie chart
   const COLORS = ["#8b5cf6", "#06b6d4", "#10b981", "#f59e0b", "#ef4444", "#ec4899", "#6366f1", "#84cc16"];
@@ -1118,34 +1162,48 @@ export default function App() {
           </button>
         </div>
 
-        {/* Chat Messages Area */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {chatMessages.length === 0 ? (
-            <div className="text-center text-gray-400 text-lg mt-8">
-              Ask me anything about your spending!
-            </div>
-          ) : (
-            chatMessages.map((msg, idx) => (
-              <div
-                key={idx}
-                className={cn(
-                  "p-3 rounded-xl text-base max-w-[85%]",
-                  msg.role === "user"
-                    ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white ml-auto"
-                    : "bg-gray-100 text-gray-900"
-                )}
-              >
-                {msg.content}
+  {/* Chat Messages */}
+  <div className="flex-1 overflow-y-auto p-4 space-y-3">
+    {chatMessages.length === 0 ? (
+      <div className="text-center text-gray-400 text-lg mt-8">
+        Ask me anything about your spending!
+      </div>
+    ) : (
+      chatMessages.map((msg, idx) => {
+        if (msg.role === "assistant" && msg.content === "budget_status") {
+          const budget = msg.data;
+          return (
+            <div key={idx} className="p-4 rounded-xl bg-gray-100 text-gray-900 max-w-[90%]">
+              <div className="text-lg font-semibold mb-2">Budget Summary ({budget.plan.period})</div>
+              <div className="text-sm text-gray-700 mb-2">
+                Overall: ${budget.status.overall.budgeted} budgeted, ${budget.status.overall.actual} spent, ${budget.status.overall.remaining} remaining
               </div>
-            ))
-          )}
-          {chatLoading && (
-            <div className="p-3 rounded-xl text-base max-w-[85%] bg-gray-100 text-gray-500">
-              Thinking...
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                {Object.entries(budget.status.by_category).map(([cat, val]) => (
+                  <div key={cat} className="p-2 border rounded-lg bg-white">
+                    <div className="font-medium">{cat}</div>
+                    <div>Budgeted: ${val.budgeted}</div>
+                    <div>Actual: ${val.actual}</div>
+                    <div>Remaining: ${val.remaining}</div>
+                  </div>
+                ))}
+              </div>
             </div>
-          )}
-        </div>
+          );
+        }
 
+        // Default message
+        return (
+          <div
+            key={idx}
+            className={cn(
+              "p-3 rounded-xl text-base max-w-[85%]",
+              msg.role === "user"
+                ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white ml-auto"
+                : "bg-gray-100 text-gray-900"
+            )}
+          >
+            {typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content)}
         {/* Chat Input */}
         <div className="p-5 border-t border-gray-200">
           <div className="flex gap-3">
@@ -1182,8 +1240,41 @@ export default function App() {
               {chatLoading ? "..." : "Send"}
             </button>
           </div>
-        </div>
-      </div>
+        );
+      })
+    )}
+  </div>
+
+  {/* Chat Input */}
+  <div className="p-5 border-t border-gray-200">
+    <div className="flex gap-3">
+      <input
+        type="text"
+        value={chatInput}
+        onChange={(e) => setChatInput(e.target.value)}
+        placeholder="Type a message..."
+        className="flex-1 rounded-2xl border-2 border-gray-200 px-5 py-4 text-base focus:outline-none focus:border-violet-400"
+        onKeyDown={(e) => {
+          if (e.key === "Enter") handleSendChat();
+        }}
+        disabled={chatLoading}
+      />
+      <button
+        onClick={handleSendChat}
+        disabled={chatLoading || !chatInput.trim()}
+        className={cn(
+          "px-6 py-4 rounded-2xl text-base font-semibold transition-all shadow-md",
+          chatLoading || !chatInput.trim()
+            ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+            : "bg-gradient-to-r from-violet-600 to-indigo-600 text-white hover:from-violet-700 hover:to-indigo-700"
+        )}
+        type="button"
+      >
+        {chatLoading ? "..." : "Send"}
+      </button>
+    </div>
+  </div>
+</div>
 
       {/* Button to reopen chat when closed */}
       {!chatOpen && (
