@@ -12,3 +12,12 @@ def create_receipt(db: Session, merchant: str, date: Optional[str], total: float
 
 def list_receipts(db: Session) -> list[Receipt]:
     return db.query(Receipt).order_by(Receipt.id.desc()).all()
+
+
+def delete_receipt(db: Session, receipt_id: str) -> bool:
+    rec = db.query(Receipt).filter(Receipt.id == receipt_id).first()
+    if rec:
+        db.delete(rec)
+        db.commit()
+        return True
+    return False
