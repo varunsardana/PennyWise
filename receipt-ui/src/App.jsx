@@ -844,9 +844,9 @@ export default function App() {
               <div
                 key={idx}
                 className={cn(
-                  "p-3 rounded-xl text-sm max-w-[85%]",
+                  "p-3 rounded-xl text-base max-w-[85%]",
                   msg.role === "user"
-                    ? "bg-black text-white ml-auto"
+                    ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white ml-auto"
                     : "bg-gray-100 text-gray-900"
                 )}
               >
@@ -855,7 +855,7 @@ export default function App() {
             ))
           )}
           {chatLoading && (
-            <div className="p-3 rounded-xl text-sm max-w-[85%] bg-gray-100 text-gray-500">
+            <div className="p-3 rounded-xl text-base max-w-[85%] bg-gray-100 text-gray-500">
               Thinking...
             </div>
           )}
