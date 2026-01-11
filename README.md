@@ -1,3 +1,43 @@
+# PennyWise 💸
+**Scan receipts → save expenses → visualize trends & forecasts.**
+
+PennyWise is a lightweight personal finance tracker that lets you:
+- 📷 **Scan / upload receipts**
+- 🔍 Extract totals, merchant, date, tax, category (OCR-first)
+- 🧠 Optionally use a **Vision fallback (OpenAI / Anthropic)** when OCR is weak
+- 💾 Store receipts in **SQLite**
+- 📈 View **history + trends + simple forecasting** in a clean React dashboard
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # PennyWise
 
 # Terminal A
