@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 
 
 class ReceiptItem(BaseModel):
@@ -42,3 +42,17 @@ class InsightsResponse(BaseModel):
     top_merchants: List[str]
     story_insights: List[str]
     recommendation: str
+
+class ChatMessage(BaseModel):
+    role: str  # "user" or "assistant"
+    content: str
+
+class ChatRequest(BaseModel):
+    message: str
+    conversation_history: Optional[List[ChatMessage]] = None
+
+class ChatResponse(BaseModel):
+    response: str
+    sql: Optional[str] = None
+    results: Optional[List[Dict[str, Any]]] = None
+    error: Optional[str] = None
