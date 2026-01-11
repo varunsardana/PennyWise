@@ -51,8 +51,11 @@ export async function getTrends(period = "weekly", startDate = null, endDate = n
   return await res.json();
 }
 
-export async function getChartsData(period = "all") {
-  const res = await fetch(`${API_BASE}/trends/charts?period=${encodeURIComponent(period)}`);
+export async function getChartsData(period = "all", startDate = null, endDate = null) {
+  let url = `${API_BASE}/trends/charts?period=${encodeURIComponent(period)}`;
+  if (startDate) url += `&start_date=${encodeURIComponent(startDate)}`;
+  if (endDate) url += `&end_date=${encodeURIComponent(endDate)}`;
+  const res = await fetch(url);
   if (!res.ok) throw new Error(`Charts failed (${res.status})`);
   return await res.json();
 }
@@ -149,5 +152,24 @@ export async function sendChatMessage(message, conversationHistory = null, lastB
 export async function getChatSuggestions() {
   const res = await fetch(`${API_BASE}/chatbot/suggestions`);
   if (!res.ok) throw new Error(`Suggestions failed (${res.status})`);
+  return await res.json();
+}
+
+export async function getBudgetSummary() {
+  const res = await fetch(`${API_BASE}/chatbot/budget-summary`);
+  if (!res.ok) throw new Error(`Budget summary failed (${res.status})`);
+  return await res.json();
+}
+
+export async function saveBudgetPlan(budgetProposal) {
+  const res = await fetch(`${API_BASE}/planning/save`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ budget_proposal: budgetProposal }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Save budget failed (${res.status}): ${text}`);
+  }
   return await res.json();
 }

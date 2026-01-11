@@ -9,6 +9,8 @@ import {
   getForecast,
   deleteReceipt,
   sendChatMessage,
+  getBudgetSummary,
+  saveBudgetPlan,
 } from "./api";
 import {
   PieChart,
@@ -73,7 +75,7 @@ function Money({ v }) {
 }
 
 // Left Dashboard - unified panel with tips and stats
-function LeftDashboard({ receipts }) {
+function LeftDashboard({ receipts, budgetData }) {
   const tips = [
     { icon: "💡", title: "50/30/20 Rule", text: "Spend 50% on needs, 30% on wants, 20% on savings" },
     { icon: "🎯", title: "Track Everything", text: "Small purchases add up - track every receipt!" },
@@ -141,8 +143,48 @@ function LeftDashboard({ receipts }) {
   }, [stats]);
 
   return (
-    <div className="fixed bottom-4 left-4 w-[420px] z-[100] space-y-3">
-      {/* Achievement Badges - TOP */}
+    <div className="fixed bottom-4 left-4 w-[520px] z-[100] space-y-3">
+      {/* Budget Widget */}
+      <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl shadow-lg p-6 text-white">
+        <div className="flex items-center justify-between mb-4">
+          <div className="text-base font-semibold uppercase tracking-wide text-emerald-100">Budget</div>
+          {budgetData?.has_budget && (
+            <span className="text-sm font-semibold px-3 py-1.5 rounded-full bg-white/20">
+              {budgetData.status?.overall?.percent_used || 0}% used
+            </span>
+          )}
+        </div>
+        {budgetData?.has_budget && budgetData?.plan ? (
+          <>
+            <div className="flex items-end justify-between mb-4">
+              <div>
+                <div className="text-4xl font-bold">${Number(budgetData.status?.overall?.remaining || 0).toFixed(0)}</div>
+                <div className="text-base text-emerald-100">remaining</div>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-semibold">${Number(budgetData.status?.overall?.actual || 0).toFixed(0)}</div>
+                <div className="text-base text-emerald-100">of ${Number(budgetData.plan?.total_budget || 0).toFixed(0)}</div>
+              </div>
+            </div>
+            <div className="w-full bg-white/30 rounded-full h-3">
+              <div
+                className="h-3 rounded-full bg-white transition-all"
+                style={{ width: `${Math.min(budgetData.status?.overall?.percent_used || 0, 100)}%` }}
+              />
+            </div>
+          </>
+        ) : (
+          <div className="flex items-center gap-4 py-2">
+            <div className="text-4xl">💰</div>
+            <div>
+              <div className="text-white font-semibold text-lg">No budget yet</div>
+              <div className="text-emerald-100">Chat with Penny to create one!</div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Achievement Badges */}
       <div className="bg-white/95 backdrop-blur rounded-2xl shadow-lg border border-gray-100 p-6">
         <div className="text-base font-semibold text-gray-400 uppercase tracking-wide mb-5">Achievements</div>
         <div className="grid grid-cols-4 gap-4">
@@ -480,6 +522,9 @@ export default function App() {
   const [isResizing, setIsResizing] = useState(false);
   const [hasResized, setHasResized] = useState(false);  // Track if user manually resized
   const [showCoins, setShowCoins] = useState(false);  // Disabled for now
+  const [budgetData, setBudgetData] = useState(null);
+  const [budgetProposal, setBudgetProposal] = useState(null);
+  const [budgetLoading, setBudgetLoading] = useState(false);
 
   const CATEGORIES = ["Groceries", "Dining", "Gas", "Shopping", "Entertainment", "Healthcare", "Travel", "Utilities", "Other"];
 
@@ -510,6 +555,17 @@ export default function App() {
       const history = newMessages.map((m) => ({ role: m.role, content: m.content }));
       const response = await sendChatMessage(userMessage, history);
       setChatMessages([...newMessages, { role: "assistant", content: response.response }]);
+
+      // Capture budget proposal from chatbot if present
+      if (response.budgetProposal && response.readyToSave) {
+        setBudgetProposal(response.budgetProposal);
+        // Auto-navigate to Budget tab and show notification
+        setTab("budget");
+        setChatMessages(prev => [...prev, {
+          role: "assistant",
+          content: "🎉 Your budget proposal is ready! I've opened the Budget tab - review it and click 'Approve & Save' to activate it!"
+        }]);
+      }
     } catch (e) {
       setChatMessages([
         ...newMessages,
@@ -535,14 +591,28 @@ export default function App() {
     setTrends(data);
   }
 
-  async function refreshChartsData(period = trendsPeriod) {
-    const data = await getChartsData(period);
+  async function refreshChartsData(period = trendsPeriod, startDate = null, endDate = null) {
+    const data = await getChartsData(period, startDate, endDate);
     setChartsData(data);
   }
 
-  // Load receipts on startup for the stats dashboard
+  async function refreshBudget() {
+    setBudgetLoading(true);
+    try {
+      const data = await getBudgetSummary();
+      setBudgetData(data);
+    } catch (e) {
+      // No budget yet is OK
+      setBudgetData(null);
+    } finally {
+      setBudgetLoading(false);
+    }
+  }
+
+  // Load receipts and budget on startup for the stats dashboard
   useEffect(() => {
     refreshReceipts().catch(() => {});
+    refreshBudget().catch(() => {});
   }, []);
   async function refreshForecast(horizon = 12) {
     setForecastLoading(true);
@@ -563,9 +633,12 @@ export default function App() {
         if (tab === "history") await refreshReceipts();
         if (tab === "insights") await refreshInsights();
         if (tab === "trends") {
-          await refreshTrends();
+          await refreshTrends(trendsPeriod);
           await refreshInsights();
-          await refreshChartsData();
+          await refreshChartsData(trendsPeriod);
+        }
+        if (tab === "budget") {
+          await refreshBudget();
         }
       } catch (e) {
         setErr(e.message || "Something went wrong");
@@ -676,7 +749,7 @@ export default function App() {
     <>
     {/* Falling coins animation on load */}
     <FallingCoins show={showCoins} onComplete={() => setShowCoins(false)} />
-    <LeftDashboard receipts={receipts} />
+    <LeftDashboard receipts={receipts} budgetData={budgetData} />
 
     <div className="h-screen flex flex-col bg-gray-50 transition-all duration-300" style={{ marginRight: chatOpen && hasResized ? chatWidth : 0 }}>
       <div className="flex-shrink-0 border-b border-gray-200 bg-white/80 backdrop-blur">
@@ -684,12 +757,13 @@ export default function App() {
           <div className="flex items-center justify-between">
             <div>
               <div className="text-4xl font-bold text-gray-900">PennyWise</div>
-              <div className="text-base text-gray-500">Scan → Save → Trends</div>
+              <div className="text-base text-gray-500">Scan → Budget → Save</div>
             </div>
             <div className="flex gap-2">
               <Pill active={tab === "scan"} onClick={() => setTab("scan")}>Scan</Pill>
               <Pill active={tab === "history"} onClick={() => setTab("history")}>History</Pill>
               <Pill active={tab === "trends"} onClick={() => setTab("trends")}>Trends</Pill>
+              <Pill active={tab === "budget"} onClick={() => setTab("budget")}>Budget</Pill>
             </div>
           </div>
         </div>
@@ -1063,7 +1137,7 @@ export default function App() {
             <div className="space-y-5">
               <div className="flex justify-center">
                 <div className="inline-flex rounded-xl bg-gray-100 p-1.5 flex-wrap gap-1">
-                  {["daily", "weekly", "monthly", "yearly", "all"].map((p) => (
+                  {["custom", "daily", "weekly", "monthly", "yearly", "all"].map((p) => (
                     <button
                       key={p}
                       onClick={() => setTrendsPeriod(p)}
@@ -1075,11 +1149,52 @@ export default function App() {
                       )}
                       type="button"
                     >
-                      {p === "all" ? "All Time" : p.charAt(0).toUpperCase() + p.slice(1)}
+                      {p === "all" ? "All Time" : p === "custom" ? "Custom" : p.charAt(0).toUpperCase() + p.slice(1)}
                     </button>
                   ))}
                 </div>
               </div>
+
+              {trendsPeriod === "custom" && (
+                <div className="flex justify-center items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium text-gray-600">From:</label>
+                    <input
+                      type="date"
+                      value={customStartDate}
+                      onChange={(e) => setCustomStartDate(e.target.value)}
+                      className="px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-violet-400"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium text-gray-600">To:</label>
+                    <input
+                      type="date"
+                      value={customEndDate}
+                      onChange={(e) => setCustomEndDate(e.target.value)}
+                      className="px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-violet-400"
+                    />
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (customStartDate && customEndDate) {
+                        refreshTrends("custom", customStartDate, customEndDate);
+                        refreshChartsData("custom", customStartDate, customEndDate);
+                      }
+                    }}
+                    disabled={!customStartDate || !customEndDate}
+                    className={cn(
+                      "px-4 py-2 rounded-lg text-sm font-semibold transition",
+                      customStartDate && customEndDate
+                        ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white hover:from-violet-700 hover:to-indigo-700"
+                        : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                    )}
+                    type="button"
+                  >
+                    Apply
+                  </button>
+                </div>
+              )}
 
               {trends ? (
                 <div className="space-y-4">
@@ -1305,6 +1420,89 @@ export default function App() {
                     </div>
                   )}
 
+                  {/* Top Merchants Chart */}
+                  {chartsData?.top_merchants?.length > 0 && (
+                    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                      <div className="text-lg font-semibold text-gray-900 mb-4">
+                        Top Merchants
+                      </div>
+                      <ResponsiveContainer width="100%" height={Math.max(200, chartsData.top_merchants.length * 40)}>
+                        <BarChart data={chartsData.top_merchants} layout="vertical">
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis type="number" tick={{ fontSize: 12 }} tickFormatter={(v) => `$${v}`} />
+                          <YAxis type="category" dataKey="merchant" tick={{ fontSize: 12 }} width={100} />
+                          <Tooltip
+                            formatter={(value, name) => [`$${Number(value).toFixed(2)}`, "Total"]}
+                            labelFormatter={(label) => label}
+                          />
+                          <Bar dataKey="amount" fill="#06b6d4" radius={[0, 4, 4, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+
+                  {/* Category Trends Chart */}
+                  {chartsData?.category_trends?.length > 0 && (
+                    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                      <div className="text-lg font-semibold text-gray-900 mb-4">
+                        Category Trends
+                      </div>
+                      <ResponsiveContainer width="100%" height={250}>
+                        <LineChart data={chartsData.category_trends}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                          <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `$${v}`} />
+                          <Tooltip formatter={(value) => `$${Number(value).toFixed(2)}`} />
+                          {chartsData.category_trends[0] &&
+                            Object.keys(chartsData.category_trends[0].categories || {}).map((cat, idx) => (
+                              <Line
+                                key={cat}
+                                type="monotone"
+                                dataKey={`categories.${cat}`}
+                                name={cat}
+                                stroke={COLORS[idx % COLORS.length]}
+                                strokeWidth={2}
+                                dot={{ r: 4 }}
+                              />
+                            ))}
+                        </LineChart>
+                      </ResponsiveContainer>
+                      {/* Legend for categories */}
+                      <div className="mt-3 flex flex-wrap gap-3 justify-center">
+                        {chartsData.category_trends[0] &&
+                          Object.keys(chartsData.category_trends[0].categories || {}).map((cat, idx) => (
+                            <div key={cat} className="flex items-center gap-1">
+                              <div
+                                className="w-3 h-3 rounded-full"
+                                style={{ backgroundColor: COLORS[idx % COLORS.length] }}
+                              />
+                              <span className="text-sm text-gray-600">{cat}</span>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Day of Week Chart */}
+                  {chartsData?.day_of_week?.length > 0 && (
+                    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                      <div className="text-lg font-semibold text-gray-900 mb-4">
+                        Spending by Day of Week
+                      </div>
+                      <ResponsiveContainer width="100%" height={200}>
+                        <BarChart data={chartsData.day_of_week}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis dataKey="day" tick={{ fontSize: 12 }} />
+                          <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `$${v}`} />
+                          <Tooltip
+                            formatter={(value, name) => [`$${Number(value).toFixed(2)}`, "Total"]}
+                          />
+                          <Bar dataKey="amount" fill="#10b981" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+
                   {insights && (
                     <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
                       <div className="text-xl font-semibold text-gray-900">Story</div>
@@ -1322,6 +1520,236 @@ export default function App() {
               ) : (
                 <div className="rounded-2xl border border-gray-200 bg-white p-6 text-sm text-gray-500 shadow-sm text-center">
                   Loading trends...
+                </div>
+              )}
+            </div>
+          )}
+
+          {tab === "budget" && (
+            <div className="space-y-5">
+              {/* Pending Budget Proposal from Chatbot */}
+              {budgetProposal && (
+                <div className="rounded-2xl border-2 border-violet-400 bg-violet-50 p-6 shadow-sm">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="text-xl font-semibold text-violet-900 flex items-center gap-2">
+                        <span className="text-2xl">💬</span> New Budget Proposal
+                      </div>
+                      <div className="text-base text-violet-700 mt-1">
+                        Your chatbot created this budget plan. Review and approve it!
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <div className="rounded-xl bg-white p-4 border border-violet-200">
+                      <div className="text-sm text-gray-500">Period</div>
+                      <div className="text-lg font-semibold text-gray-900 capitalize">{budgetProposal.period}</div>
+                    </div>
+                    <div className="rounded-xl bg-white p-4 border border-violet-200">
+                      <div className="text-sm text-gray-500">Total Budget</div>
+                      <div className="text-lg font-semibold text-gray-900">${Number(budgetProposal.total_budget || 0).toFixed(2)}</div>
+                    </div>
+                    {budgetProposal.savings_goal && (
+                      <div className="rounded-xl bg-white p-4 border border-violet-200">
+                        <div className="text-sm text-gray-500">Savings Goal</div>
+                        <div className="text-lg font-semibold text-emerald-600">${Number(budgetProposal.savings_goal).toFixed(2)}</div>
+                      </div>
+                    )}
+                    {budgetProposal.primary_goal && (
+                      <div className="rounded-xl bg-white p-4 border border-violet-200">
+                        <div className="text-sm text-gray-500">Goal</div>
+                        <div className="text-base font-medium text-gray-900">{budgetProposal.primary_goal}</div>
+                      </div>
+                    )}
+                  </div>
+
+                  {budgetProposal.category_budgets && (
+                    <div className="mt-4">
+                      <div className="text-base font-medium text-gray-700 mb-3">Category Allocations</div>
+                      <div className="space-y-2">
+                        {Object.entries(budgetProposal.category_budgets).map(([cat, amount]) => (
+                          <div key={cat} className="flex items-center justify-between bg-white rounded-lg px-4 py-3 border border-violet-200">
+                            <span className="text-base text-gray-700 capitalize">{cat.replace(/_/g, ' ')}</span>
+                            <span className="text-base font-semibold text-gray-900">${Number(amount).toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="mt-5 flex gap-3">
+                    <button
+                      onClick={async () => {
+                        try {
+                          setErr("");
+                          await saveBudgetPlan(budgetProposal);
+                          setBudgetProposal(null);
+                          await refreshBudget();
+                        } catch (e) {
+                          setErr(e.message);
+                        }
+                      }}
+                      className="flex-1 rounded-xl px-6 py-3 text-base font-semibold text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 shadow-lg transition-all"
+                      type="button"
+                    >
+                      Approve & Save Budget
+                    </button>
+                    <button
+                      onClick={() => setBudgetProposal(null)}
+                      className="rounded-xl px-6 py-3 text-base font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-all"
+                      type="button"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Current Active Budget */}
+              {budgetLoading ? (
+                <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm text-center">
+                  <div className="text-lg text-gray-500">Loading budget...</div>
+                </div>
+              ) : budgetData?.has_budget && budgetData?.plan ? (
+                <div className="space-y-4">
+                  {/* Budget Overview */}
+                  <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-xl font-semibold text-gray-900">Your {budgetData.plan.period} Budget</div>
+                        <div className="text-base text-gray-500 mt-1">
+                          {budgetData.status?.date_range?.start} to {budgetData.status?.date_range?.end}
+                        </div>
+                      </div>
+                      <button
+                        onClick={refreshBudget}
+                        className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition"
+                        type="button"
+                      >
+                        Refresh
+                      </button>
+                    </div>
+
+                    <div className="mt-5 grid grid-cols-3 gap-4">
+                      <div className="rounded-xl bg-gray-50 p-4">
+                        <div className="text-sm text-gray-500">Total Budget</div>
+                        <div className="text-2xl font-bold text-gray-900">${Number(budgetData.plan.total_budget || 0).toFixed(2)}</div>
+                      </div>
+                      <div className="rounded-xl bg-gray-50 p-4">
+                        <div className="text-sm text-gray-500">Spent</div>
+                        <div className="text-2xl font-bold text-violet-600">${Number(budgetData.status?.overall?.actual || 0).toFixed(2)}</div>
+                      </div>
+                      <div className="rounded-xl bg-gray-50 p-4">
+                        <div className="text-sm text-gray-500">Remaining</div>
+                        <div className={cn(
+                          "text-2xl font-bold",
+                          (budgetData.status?.overall?.remaining || 0) >= 0 ? "text-emerald-600" : "text-red-600"
+                        )}>
+                          ${Number(budgetData.status?.overall?.remaining || 0).toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Overall Progress Bar */}
+                    <div className="mt-5">
+                      <div className="flex justify-between text-sm mb-2">
+                        <span className="text-gray-600">Overall Progress</span>
+                        <span className={cn(
+                          "font-semibold",
+                          (budgetData.status?.overall?.percent_used || 0) > 100 ? "text-red-600" :
+                          (budgetData.status?.overall?.percent_used || 0) > 80 ? "text-amber-600" : "text-emerald-600"
+                        )}>
+                          {budgetData.status?.overall?.percent_used || 0}%
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-4">
+                        <div
+                          className={cn(
+                            "h-4 rounded-full transition-all",
+                            (budgetData.status?.overall?.percent_used || 0) > 100 ? "bg-red-500" :
+                            (budgetData.status?.overall?.percent_used || 0) > 80 ? "bg-amber-500" : "bg-emerald-500"
+                          )}
+                          style={{ width: `${Math.min(budgetData.status?.overall?.percent_used || 0, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {budgetData.plan.savings_goal && (
+                      <div className="mt-4 rounded-xl bg-emerald-50 border border-emerald-200 p-4">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl">🎯</span>
+                          <div>
+                            <div className="text-sm text-emerald-700">Savings Goal</div>
+                            <div className="text-lg font-semibold text-emerald-800">${Number(budgetData.plan.savings_goal).toFixed(2)}/month</div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Category Breakdown */}
+                  {budgetData.status?.by_category && Object.keys(budgetData.status.by_category).length > 0 && (
+                    <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+                      <div className="text-lg font-semibold text-gray-900 mb-4">Category Breakdown</div>
+                      <div className="space-y-4">
+                        {Object.entries(budgetData.status.by_category).map(([cat, info], idx) => (
+                          <div key={cat}>
+                            <div className="flex justify-between mb-1">
+                              <div className="flex items-center gap-2">
+                                <div
+                                  className="w-3 h-3 rounded-full"
+                                  style={{ backgroundColor: COLORS[idx % COLORS.length] }}
+                                />
+                                <span className="text-base font-medium text-gray-700 capitalize">{cat.replace(/_/g, ' ')}</span>
+                              </div>
+                              <div className="text-right">
+                                <span className="text-base text-gray-900">${Number(info.actual || 0).toFixed(2)}</span>
+                                <span className="text-gray-400 mx-1">/</span>
+                                <span className="text-base text-gray-500">${Number(info.budgeted || 0).toFixed(2)}</span>
+                              </div>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2.5">
+                              <div
+                                className={cn(
+                                  "h-2.5 rounded-full transition-all",
+                                  (info.percent_used || 0) > 100 ? "bg-red-500" :
+                                  (info.percent_used || 0) > 80 ? "bg-amber-500" : "bg-emerald-500"
+                                )}
+                                style={{ width: `${Math.min(info.percent_used || 0, 100)}%` }}
+                              />
+                            </div>
+                            <div className="text-xs text-right mt-1">
+                              <span className={cn(
+                                (info.remaining || 0) >= 0 ? "text-emerald-600" : "text-red-600"
+                              )}>
+                                ${Number(info.remaining || 0).toFixed(2)} remaining
+                              </span>
+                              <span className="text-gray-400 ml-2">({info.percent_used || 0}%)</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm text-center">
+                  <div className="text-5xl mb-4">💰</div>
+                  <div className="text-xl font-semibold text-gray-900">No Budget Yet</div>
+                  <div className="text-base text-gray-500 mt-2 max-w-md mx-auto">
+                    Chat with our assistant to create a personalized budget plan based on your spending habits!
+                  </div>
+                  <button
+                    onClick={() => {
+                      setChatOpen(true);
+                      setChatInput("Help me create a budget");
+                    }}
+                    className="mt-6 px-6 py-3 rounded-xl text-base font-semibold text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 shadow-lg transition-all"
+                    type="button"
+                  >
+                    Start Budget Planning
+                  </button>
                 </div>
               )}
             </div>

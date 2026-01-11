@@ -229,39 +229,91 @@ def compute_trends(
     }
 
 
-def compute_charts_data(db: Session, period: str = "all") -> Dict:
+def compute_charts_data(db: Session, period: str = "all", start_date: str = None, end_date: str = None) -> Dict:
     """
     Compute data for all 4 additional charts.
-    Filters receipts by the selected period.
+    Smart grouping based on period:
+    - daily: last 30 days, grouped by day
+    - weekly: last 12 weeks, grouped by week
+    - monthly: last 12 months, grouped by month
+    - yearly: all time, grouped by year
+    - custom: user-specified range, grouped by day/week/month depending on range size
+    - all: all time, grouped by month
     """
     all_receipts = db.query(Receipt).all()
+    now = datetime.now()
 
-    # Filter by period if not "all"
-    if period != "all":
-        current_start, current_end = _get_date_range(period)
-        all_receipts = _filter_receipts_by_date(all_receipts, current_start, current_end)
+    # Smart date range and grouping based on period
+    if period == "custom" and start_date and end_date:
+        filter_start = datetime.fromisoformat(start_date)
+        filter_end = datetime.fromisoformat(end_date) + timedelta(days=1)  # Include end date
+        range_days = (filter_end - filter_start).days
+        # Smart grouping based on range size
+        if range_days <= 14:
+            date_format = "%b %d"  # Group by day
+            parse_format = "%b %d %Y"
+        elif range_days <= 90:
+            date_format = "W%W %Y"  # Group by week
+            parse_format = "W%W %Y"
+        else:
+            date_format = "%b %Y"  # Group by month
+            parse_format = "%b %Y"
+        all_receipts = [r for r in all_receipts if r.date and filter_start <= datetime.fromisoformat(r.date) < filter_end]
+    elif period == "daily":
+        filter_start = now - timedelta(days=30)
+        date_format = "%b %d"  # "Jan 11"
+        parse_format = "%b %d %Y"
+        all_receipts = [r for r in all_receipts if r.date and datetime.fromisoformat(r.date) >= filter_start]
+    elif period == "weekly":
+        filter_start = now - timedelta(weeks=12)
+        date_format = "W%W %Y"  # "W02 2026"
+        parse_format = "W%W %Y"
+        all_receipts = [r for r in all_receipts if r.date and datetime.fromisoformat(r.date) >= filter_start]
+    elif period == "monthly":
+        filter_start = now - timedelta(days=365)
+        date_format = "%b %Y"  # "Jan 2026"
+        parse_format = "%b %Y"
+        all_receipts = [r for r in all_receipts if r.date and datetime.fromisoformat(r.date) >= filter_start]
+    elif period == "yearly":
+        date_format = "%Y"  # "2026"
+        parse_format = "%Y"
+    else:  # all
+        date_format = "%b %Y"  # "Jan 2026"
+        parse_format = "%b %Y"
 
-    # 1. Spending Over Time - group by month
-    spending_by_month = defaultdict(float)
+    def get_time_key(dt):
+        if period == "weekly":
+            return f"W{dt.isocalendar()[1]:02d} {dt.year}"
+        return dt.strftime(date_format)
+
+    def parse_time_key(key):
+        try:
+            if period == "daily":
+                return datetime.strptime(key + f" {now.year}", parse_format)
+            elif period == "weekly":
+                parts = key.split(" ")
+                week_num = int(parts[0][1:])
+                year = int(parts[1])
+                return datetime.strptime(f"{year}-W{week_num:02d}-1", "%Y-W%W-%w")
+            else:
+                return datetime.strptime(key, parse_format)
+        except:
+            return datetime.min
+
+    # 1. Spending Over Time - smart grouping
+    spending_by_time = defaultdict(float)
     for r in all_receipts:
         if r.date:
             try:
                 dt = datetime.fromisoformat(r.date)
-                month_key = dt.strftime("%b %Y")  # "Jan 2026"
-                spending_by_month[month_key] += float(r.total or 0)
+                time_key = get_time_key(dt)
+                spending_by_time[time_key] += float(r.total or 0)
             except ValueError:
                 continue
 
-    # Sort by date
-    def parse_month_key(key):
-        try:
-            return datetime.strptime(key, "%b %Y")
-        except:
-            return datetime.min
-
     spending_over_time = [
         {"date": k, "amount": round(v, 2)}
-        for k, v in sorted(spending_by_month.items(), key=lambda x: parse_month_key(x[0]))
+        for k, v in sorted(spending_by_time.items(), key=lambda x: parse_time_key(x[0]))
     ]
 
     # 2. Top Merchants
@@ -275,15 +327,15 @@ def compute_charts_data(db: Session, period: str = "all") -> Dict:
         for k, v in sorted(merchant_data.items(), key=lambda x: x[1]["amount"], reverse=True)
     ][:10]  # Top 10
 
-    # 3. Category Trends - spending by category over time (monthly)
-    category_by_month = defaultdict(lambda: defaultdict(float))
+    # 3. Category Trends - spending by category over time (smart grouping)
+    category_by_time = defaultdict(lambda: defaultdict(float))
     all_categories = set()
     for r in all_receipts:
         if r.date:
             try:
                 dt = datetime.fromisoformat(r.date)
-                month_key = dt.strftime("%b %Y")
-                category_by_month[month_key][r.category] += float(r.total or 0)
+                time_key = get_time_key(dt)
+                category_by_time[time_key][r.category] += float(r.total or 0)
                 all_categories.add(r.category)
             except ValueError:
                 continue
@@ -293,7 +345,7 @@ def compute_charts_data(db: Session, period: str = "all") -> Dict:
             "date": k,
             "categories": {cat: round(v.get(cat, 0), 2) for cat in all_categories}
         }
-        for k, v in sorted(category_by_month.items(), key=lambda x: parse_month_key(x[0]))
+        for k, v in sorted(category_by_time.items(), key=lambda x: parse_time_key(x[0]))
     ]
 
     # 4. Day of Week spending

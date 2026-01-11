@@ -12,8 +12,18 @@ chatbot = ChatbotService()
 planner = BudgetPlanningService()
 
 
-def detect_intent(message: str) -> str:
+def detect_intent(message: str, history: list = None) -> str:
     msg = message.lower()
+
+    # Check if we're continuing a planning conversation
+    if history:
+        for item in history:
+            content = (item.get("content") or "").lower()
+            if any(p in content for p in [
+                "create a budget", "help me budget", "make a budget",
+                "plan my budget", "build a budget", "start budget planning"
+            ]):
+                return "planning"
 
     if any(p in msg for p in [
         "create a budget", "help me budget", "make a budget",
@@ -43,7 +53,7 @@ async def handle_message(payload: Dict[str, Any], db: Session = Depends(get_db))
     history = payload.get("conversation_history")
     original_proposal = payload.get("original_proposal")
 
-    intent = detect_intent(message)
+    intent = detect_intent(message, history)
     print(f"Received message: {message}")
     print(f"Detected intent: {intent}")
 

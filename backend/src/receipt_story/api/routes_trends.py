@@ -63,7 +63,9 @@ def get_trends(
 
 @router.get("/charts", response_model=ChartsDataResponse)
 def get_charts_data(
-    period: str = Query("all", description="Time period: daily, weekly, monthly, yearly, or all"),
+    period: str = Query("all", description="Time period: daily, weekly, monthly, yearly, custom, or all"),
+    start_date: Optional[str] = Query(None, description="Start date for custom range (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="End date for custom range (YYYY-MM-DD)"),
     db: Session = Depends(get_db)
 ):
     """
@@ -73,10 +75,14 @@ def get_charts_data(
     - Category trends over time
     - Day of week spending
     """
-    if period not in ["daily", "weekly", "monthly", "yearly", "all"]:
+    if period not in ["daily", "weekly", "monthly", "yearly", "all", "custom"]:
         period = "all"
 
-    data = compute_charts_data(db, period=period)
+    # If custom but missing dates, fall back to all
+    if period == "custom" and (not start_date or not end_date):
+        period = "all"
+
+    data = compute_charts_data(db, period=period, start_date=start_date, end_date=end_date)
 
     return ChartsDataResponse(
         spending_over_time=[SpendingOverTimePoint(**p) for p in data["spending_over_time"]],

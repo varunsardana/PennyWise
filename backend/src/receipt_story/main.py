@@ -1,6 +1,8 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware  
 from dotenv import load_dotenv
+load_dotenv()  # Load env vars BEFORE other imports
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from receipt_story.core.logging import configure_logging
 from receipt_story.api.health import router as health_router
@@ -13,7 +15,6 @@ from receipt_story.api.routes_chatbot import router as chatbot_router
 from receipt_story.api.routes_planning import router as planning_router
 from receipt_story.api.routes_dispatcher import router as dispatcher_router
 
-load_dotenv()
 logger = configure_logging()
 
 def create_app() -> FastAPI:
