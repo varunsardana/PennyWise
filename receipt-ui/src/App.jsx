@@ -11,6 +11,8 @@ import {
   sendChatMessage,
   getBudgetSummary,
   saveBudgetPlan,
+  resetBudget,
+  updateBudgetPlan,
 } from "./api";
 import {
   PieChart,
@@ -525,6 +527,8 @@ export default function App() {
   const [budgetData, setBudgetData] = useState(null);
   const [budgetProposal, setBudgetProposal] = useState(null);
   const [budgetLoading, setBudgetLoading] = useState(false);
+  const [editingBudget, setEditingBudget] = useState(false);
+  const [editBudgetValues, setEditBudgetValues] = useState({});
 
   const CATEGORIES = ["Groceries", "Dining", "Gas", "Shopping", "Entertainment", "Healthcare", "Travel", "Utilities", "Other"];
 
@@ -609,10 +613,15 @@ export default function App() {
     }
   }
 
-  // Load receipts and budget on startup for the stats dashboard
+  // Load receipts on startup and reset budget for demo purposes
   useEffect(() => {
     refreshReceipts().catch(() => {});
-    refreshBudget().catch(() => {});
+    // Reset budget on page load so demo starts fresh
+    resetBudget().then(() => {
+      refreshBudget();
+    }).catch(() => {
+      refreshBudget();
+    });
   }, []);
   async function refreshForecast(horizon = 12) {
     setForecastLoading(true);
@@ -1622,19 +1631,92 @@ export default function App() {
                           {budgetData.status?.date_range?.start} to {budgetData.status?.date_range?.end}
                         </div>
                       </div>
-                      <button
-                        onClick={refreshBudget}
-                        className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition"
-                        type="button"
-                      >
-                        Refresh
-                      </button>
+                      <div className="flex gap-2">
+                        {!editingBudget ? (
+                          <>
+                            <button
+                              onClick={() => {
+                                setEditingBudget(true);
+                                // Initialize edit values from current budget
+                                const categoryBudgets = {};
+                                if (budgetData.status?.by_category) {
+                                  Object.entries(budgetData.status.by_category).forEach(([cat, info]) => {
+                                    categoryBudgets[cat] = info.budgeted || 0;
+                                  });
+                                }
+                                setEditBudgetValues({
+                                  categoryBudgets,
+                                  totalBudget: budgetData.plan.total_budget || 0,
+                                  savingsGoal: budgetData.plan.savings_goal || 0,
+                                });
+                              }}
+                              className="px-4 py-2 text-sm font-medium text-violet-600 bg-violet-50 rounded-lg hover:bg-violet-100 transition"
+                              type="button"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={refreshBudget}
+                              className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition"
+                              type="button"
+                            >
+                              Refresh
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              onClick={async () => {
+                                try {
+                                  setErr("");
+                                  await updateBudgetPlan(
+                                    editBudgetValues.categoryBudgets,
+                                    editBudgetValues.totalBudget,
+                                    editBudgetValues.savingsGoal
+                                  );
+                                  setEditingBudget(false);
+                                  await refreshBudget();
+                                } catch (e) {
+                                  setErr(e.message);
+                                }
+                              }}
+                              className="px-4 py-2 text-sm font-medium text-white bg-emerald-500 rounded-lg hover:bg-emerald-600 transition"
+                              type="button"
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={() => setEditingBudget(false)}
+                              className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition"
+                              type="button"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
 
                     <div className="mt-5 grid grid-cols-3 gap-4">
                       <div className="rounded-xl bg-gray-50 p-4">
                         <div className="text-sm text-gray-500">Total Budget</div>
-                        <div className="text-2xl font-bold text-gray-900">${Number(budgetData.plan.total_budget || 0).toFixed(2)}</div>
+                        {editingBudget ? (
+                          <div className="flex items-center mt-1">
+                            <span className="text-2xl font-bold text-gray-900">$</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={editBudgetValues.totalBudget || 0}
+                              onChange={(e) => setEditBudgetValues(prev => ({
+                                ...prev,
+                                totalBudget: parseFloat(e.target.value) || 0
+                              }))}
+                              className="w-28 px-2 py-1 text-xl font-bold text-gray-900 bg-violet-50 border border-violet-300 rounded-lg focus:outline-none focus:border-violet-500"
+                            />
+                          </div>
+                        ) : (
+                          <div className="text-2xl font-bold text-gray-900">${Number(budgetData.plan.total_budget || 0).toFixed(2)}</div>
+                        )}
                       </div>
                       <div className="rounded-xl bg-gray-50 p-4">
                         <div className="text-sm text-gray-500">Spent</div>
@@ -1675,13 +1757,30 @@ export default function App() {
                       </div>
                     </div>
 
-                    {budgetData.plan.savings_goal && (
+                    {(budgetData.plan.savings_goal || editingBudget) && (
                       <div className="mt-4 rounded-xl bg-emerald-50 border border-emerald-200 p-4">
                         <div className="flex items-center gap-2">
                           <span className="text-xl">🎯</span>
                           <div>
                             <div className="text-sm text-emerald-700">Savings Goal</div>
-                            <div className="text-lg font-semibold text-emerald-800">${Number(budgetData.plan.savings_goal).toFixed(2)}/month</div>
+                            {editingBudget ? (
+                              <div className="flex items-center mt-1">
+                                <span className="text-lg font-semibold text-emerald-800">$</span>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={editBudgetValues.savingsGoal || 0}
+                                  onChange={(e) => setEditBudgetValues(prev => ({
+                                    ...prev,
+                                    savingsGoal: parseFloat(e.target.value) || 0
+                                  }))}
+                                  className="w-24 px-2 py-1 text-base font-semibold text-emerald-800 bg-white border border-emerald-300 rounded-lg focus:outline-none focus:border-emerald-500"
+                                />
+                                <span className="text-lg font-semibold text-emerald-800 ml-1">/month</span>
+                              </div>
+                            ) : (
+                              <div className="text-lg font-semibold text-emerald-800">${Number(budgetData.plan.savings_goal).toFixed(2)}/month</div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1703,10 +1802,32 @@ export default function App() {
                                 />
                                 <span className="text-base font-medium text-gray-700 capitalize">{cat.replace(/_/g, ' ')}</span>
                               </div>
-                              <div className="text-right">
+                              <div className="text-right flex items-center gap-1">
                                 <span className="text-base text-gray-900">${Number(info.actual || 0).toFixed(2)}</span>
                                 <span className="text-gray-400 mx-1">/</span>
-                                <span className="text-base text-gray-500">${Number(info.budgeted || 0).toFixed(2)}</span>
+                                {editingBudget ? (
+                                  <div className="flex items-center">
+                                    <span className="text-gray-500">$</span>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      value={editBudgetValues.categoryBudgets?.[cat] || 0}
+                                      onChange={(e) => {
+                                        const val = parseFloat(e.target.value) || 0;
+                                        setEditBudgetValues(prev => ({
+                                          ...prev,
+                                          categoryBudgets: {
+                                            ...prev.categoryBudgets,
+                                            [cat]: val
+                                          }
+                                        }));
+                                      }}
+                                      className="w-20 px-2 py-1 text-base text-gray-900 bg-violet-50 border border-violet-300 rounded-lg focus:outline-none focus:border-violet-500"
+                                    />
+                                  </div>
+                                ) : (
+                                  <span className="text-base text-gray-500">${Number(info.budgeted || 0).toFixed(2)}</span>
+                                )}
                               </div>
                             </div>
                             <div className="w-full bg-gray-200 rounded-full h-2.5">
