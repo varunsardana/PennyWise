@@ -1,3 +1,29 @@
+import { useEffect, useMemo, useState } from "react";
+import {
+  parseReceipt,
+  saveReceipt,
+  listReceipts,
+  getInsights,
+  getTrends,
+  getChartsData,
+  getForecast,
+  deleteReceipt,
+  sendChatMessage,
+} from "./api";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  Legend,
+  Tooltip,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  LineChart,
+  Line,
 import { useEffect, useMemo, useState, useRef } from "react";
 import { parseReceipt, saveReceipt, listReceipts, getInsights, getTrends, getChartsData, deleteReceipt, updateReceipt, sendChatMessage } from "./api";
 import {
@@ -56,117 +82,62 @@ export default function App() {
   const [insights, setInsights] = useState(null);
   const [trends, setTrends] = useState(null);
   const [chartsData, setChartsData] = useState(null);
+
+  const [forecastData, setForecastData] = useState(null);
+  const [forecastLoading, setForecastLoading] = useState(false);
+
   const [trendsPeriod, setTrendsPeriod] = useState("weekly");
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
-  const [chatOpen, setChatOpen] = useState(true);  // Open by default
+
+  const [chatOpen, setChatOpen] = useState(true); // Open by default
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
-  const [openMenuId, setOpenMenuId] = useState(null);  // Track which receipt menu is open
-  const [lastBudgetContext, setLastBudgetContext] = useState(null);
-  const [editingReceipt, setEditingReceipt] = useState(null);  // Receipt being edited
-  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);  // For custom dropdown
-  const [editCategoryDropdownOpen, setEditCategoryDropdownOpen] = useState(false);  // For edit modal dropdown
-  const [chatWidth, setChatWidth] = useState(520);  // Draggable chat width
-  const [isResizing, setIsResizing] = useState(false);
-  const [hasResized, setHasResized] = useState(false);  // Track if user manually resized
 
-  const CATEGORIES = ["Groceries", "Dining", "Gas", "Shopping", "Entertainment", "Healthcare", "Travel", "Utilities", "Other"];
+  const [openMenuId, setOpenMenuId] = useState(null); // Track which receipt menu is open
 
-  // Handle chat panel resize
-  useEffect(() => {
-    const handleMouseMove = (e) => {
-      if (!isResizing) return;
-      const newWidth = window.innerWidth - e.clientX;
-      setChatWidth(Math.max(300, Math.min(1000, newWidth)));
-      setHasResized(true);
-    };
-    const handleMouseUp = () => setIsResizing(false);
+  // Function to send chat message to backend
+  async function handleSendChat() {
+    if (!chatInput.trim() || chatLoading) return;
 
-    if (isResizing) {
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("mouseup", handleMouseUp);
+    const userMessage = chatInput.trim();
+    setChatInput("");
+
+    // Add user message to chat
+    const newMessages = [...chatMessages, { role: "user", content: userMessage }];
+    setChatMessages(newMessages);
+    setChatLoading(true);
+
+    try {
+      // Build conversation history for context
+      const history = newMessages.map((m) => ({ role: m.role, content: m.content }));
+      const response = await sendChatMessage(userMessage, history);
+
+      // Add bot response to chat
+      setChatMessages([...newMessages, { role: "assistant", content: response.response }]);
+    } catch (e) {
+      // Add error message
+      setChatMessages([
+        ...newMessages,
+        { role: "assistant", content: "Sorry, I encountered an error. Please try again." },
+      ]);
+    } finally {
+      setChatLoading(false);
     }
-    return () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-    };
-  }, [isResizing]);
-
-// inside your component
-const lastBudgetContextRef = useRef(null); // keeps latest budget context instantly
-
-async function handleSendChat() {
-  if (!chatInput.trim() || chatLoading) return;
-
-  const userMessage = chatInput.trim();
-  setChatInput("");
-
-  // Add user message to chat
-  const newMessages = [...chatMessages, { role: "user", content: userMessage }];
-  setChatMessages(newMessages);
-  setChatLoading(true);
-
-  try {
-    // Build conversation history for context
-    const history = newMessages.map(m => ({ role: m.role, content: m.content }));
-
-    console.log("Sending budget context:", lastBudgetContextRef.current);
-
-    // Send message to backend with the most up-to-date budget context
-    const response = await sendChatMessage(userMessage, history, lastBudgetContextRef.current);
-
-    // Handle response types
-    if (response.type === "budget_status" && response.has_budget) {
-      // Save context immediately in ref
-      lastBudgetContextRef.current = response;
-      setLastBudgetContext(response); // also keep state for UI rendering
-
-      setChatMessages(prev => [
-        ...newMessages,
-        { role: "assistant", content: "budget_status", data: response }
-      ]);
-
-    } else if (response.type === "budget_refine") {
-      // Update context if backend returns updated budget
-      if (response.success && response.data) {
-        lastBudgetContextRef.current = response.data;
-        setLastBudgetContext(response.data);
-      }
-
-      setChatMessages(prev => [
-        ...newMessages,
-        { role: "assistant", content: "planning", data: response }
-      ]);
-
-    } else if (response.type === "planning" || response.type === "planning_refine") {
-      setChatMessages(prev => [
-        ...newMessages,
-        { role: "assistant", content: "planning", data: response }
-      ]);
-
-    } else {
-      // Default response
-      setChatMessages(prev => [
-        ...newMessages,
-        { role: "assistant", content: response.response || "Sorry, I don't understand." }
-      ]);
-    }
-
-  } catch (e) {
-    setChatMessages(prev => [
-      ...newMessages,
-      { role: "assistant", content: `Error: ${e.message}` }
-    ]);
-  } finally {
-    setChatLoading(false);
   }
-}
-
 
   // Colors for pie chart
-  const COLORS = ["#8b5cf6", "#06b6d4", "#10b981", "#f59e0b", "#ef4444", "#ec4899", "#6366f1", "#84cc16"];
+  const COLORS = [
+    "#8b5cf6",
+    "#06b6d4",
+    "#10b981",
+    "#f59e0b",
+    "#ef4444",
+    "#ec4899",
+    "#6366f1",
+    "#84cc16",
+  ];
 
   const hasPreview = !!preview;
 
@@ -188,6 +159,18 @@ async function handleSendChat() {
   async function refreshChartsData(period = trendsPeriod) {
     const data = await getChartsData(period);
     setChartsData(data);
+  }
+
+  async function refreshForecast(horizon = 12) {
+    setForecastLoading(true);
+    try {
+      const data = await getForecast(horizon);
+      setForecastData(data);
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setForecastLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -220,6 +203,26 @@ async function handleSendChat() {
     if (!preview) return false;
     return !!preview.merchant && (preview.total ?? 0) > 0 && !!preview.category;
   }, [preview]);
+
+  const forecastTimeline = useMemo(() => {
+    if (!forecastData) return [];
+
+    const hist = (forecastData.history || []).map((r) => ({
+      week: r.week,
+      history: Number(r.total || 0),
+      baseline: null,
+      improved: null,
+    }));
+
+    const fut = (forecastData.baseline || []).map((r, i) => ({
+      week: r.week,
+      history: null,
+      baseline: Number(r.total || 0),
+      improved: Number(forecastData.improved?.[i]?.total ?? null),
+    }));
+
+    return [...hist, ...fut];
+  }, [forecastData]);
 
   async function onScan() {
     if (!file) return;
@@ -876,264 +879,446 @@ async function handleSendChat() {
                       ))}
                     </div>
                   </div>
-                ) : (
-                  <div className="rounded-2xl border border-gray-200 bg-white p-6 text-center shadow-sm">
-                    <div className="text-5xl mb-3">📊</div>
-                    <div className="text-lg text-gray-500">
-                      No spending data for this period.
-                    </div>
-                    <div className="text-base text-gray-400 mt-2">
-                      Add some receipts to see your trends!
-                    </div>
-                  </div>
-                )}
 
-                {/* Spending Over Time Chart */}
-                {chartsData?.spending_over_time?.length > 0 && (
-                  <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-                    <div className="text-lg font-semibold text-gray-900 mb-4">
-                      Spending Over Time
-                    </div>
-                    <ResponsiveContainer width="100%" height={250}>
-                      <BarChart data={chartsData.spending_over_time}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                        <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                        <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `$${v}`} />
-                        <Tooltip formatter={(value) => `$${Number(value).toFixed(2)}`} />
-                        <Bar dataKey="amount" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-
-                {/* Top Merchants Chart */}
-                {chartsData?.top_merchants?.length > 0 && (
-                  <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-                    <div className="text-lg font-semibold text-gray-900 mb-4">
-                      Top Merchants
-                    </div>
-                    <ResponsiveContainer width="100%" height={Math.max(200, chartsData.top_merchants.length * 40)}>
-                      <BarChart data={chartsData.top_merchants} layout="vertical">
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                        <XAxis type="text" inputMode="decimal" tick={{ fontSize: 12 }} tickFormatter={(v) => `$${v}`} />
-                        <YAxis type="category" dataKey="merchant" tick={{ fontSize: 12 }} width={100} />
-                        <Tooltip
-                          formatter={(value, name) => [`$${Number(value).toFixed(2)}`, "Total"]}
-                          labelFormatter={(label) => label}
-                        />
-                        <Bar dataKey="amount" fill="#06b6d4" radius={[0, 4, 4, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-
-                {/* Category Trends Chart */}
-                {chartsData?.category_trends?.length > 0 && (
-                  <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-                    <div className="text-lg font-semibold text-gray-900 mb-4">
-                      Category Trends
-                    </div>
-                    <ResponsiveContainer width="100%" height={250}>
-                      <LineChart data={chartsData.category_trends}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                        <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                        <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `$${v}`} />
-                        <Tooltip formatter={(value) => `$${Number(value).toFixed(2)}`} />
-                        {chartsData.category_trends[0] &&
-                          Object.keys(chartsData.category_trends[0].categories || {}).map((cat, idx) => (
-                            <Line
-                              key={cat}
-                              type="monotone"
-                              dataKey={`categories.${cat}`}
-                              name={cat}
-                              stroke={COLORS[idx % COLORS.length]}
-                              strokeWidth={2}
-                              dot={{ r: 4 }}
-                            />
-                          ))}
-                      </LineChart>
-                    </ResponsiveContainer>
-                    {/* Legend for categories */}
-                    <div className="mt-3 flex flex-wrap gap-3 justify-center">
-                      {chartsData.category_trends[0] &&
-                        Object.keys(chartsData.category_trends[0].categories || {}).map((cat, idx) => (
-                          <div key={cat} className="flex items-center gap-1">
-                            <div
-                              className="w-3 h-3 rounded-full"
-                              style={{ backgroundColor: COLORS[idx % COLORS.length] }}
-                            />
-                            <span className="text-sm text-gray-600">{cat}</span>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Day of Week Chart */}
-                {chartsData?.day_of_week?.length > 0 && (
-                  <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-                    <div className="text-lg font-semibold text-gray-900 mb-4">
-                      Spending by Day of Week
-                    </div>
-                    <ResponsiveContainer width="100%" height={200}>
-                      <BarChart data={chartsData.day_of_week}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                        <XAxis dataKey="day" tick={{ fontSize: 12 }} />
-                        <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `$${v}`} />
-                        <Tooltip
-                          formatter={(value, name) => [`$${Number(value).toFixed(2)}`, "Total"]}
-                        />
-                        <Bar dataKey="amount" fill="#10b981" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-
-                {/* Story Section */}
-                {insights && (
                   <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
                     <div className="text-xl font-semibold text-gray-900">Story</div>
                     <ul className="mt-3 list-disc space-y-2 pl-5 text-base text-gray-700">
-                      {(insights.story_insights || []).map((s, i) => <li key={i}>{s}</li>)}
+                      {(insights.story_insights || []).map((s, i) => (
+                        <li key={i}>{s}</li>
+                      ))}
                     </ul>
                     <div className="mt-4 rounded-xl bg-gray-50 p-4 text-base font-medium text-gray-900">
                       {insights.recommendation}
                     </div>
                   </div>
-                )}
-              </div>
-            ) : (
-              <div className="rounded-2xl border border-gray-200 bg-white p-6 text-sm text-gray-500 shadow-sm text-center">
-                Loading trends...
-              </div>
-            )}
-          </div>
-        )}
-        </div>
-      </div>
-
-      {/* Edit Receipt Modal */}
-      {editingReceipt && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl overflow-visible">
-            <div className="text-xl font-semibold text-gray-900 mb-4">Edit Receipt</div>
-
-            <div className="space-y-4 overflow-visible">
-              <div>
-                <label className="text-base font-medium text-gray-500">Merchant</label>
-                <input
-                  type="text"
-                  value={editingReceipt.merchant || ""}
-                  onChange={(e) => setEditingReceipt({ ...editingReceipt, merchant: e.target.value })}
-                  className="mt-1 w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-base focus:outline-none focus:border-violet-500"
-                />
-              </div>
-              <div>
-                <label className="text-base font-medium text-gray-500">Date</label>
-                <input
-                  type="text"
-                  value={editingReceipt.date || ""}
-                  onChange={(e) => setEditingReceipt({ ...editingReceipt, date: e.target.value })}
-                  placeholder="YYYY-MM-DD"
-                  className="mt-1 w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-base focus:outline-none focus:border-violet-500"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-base font-medium text-gray-500">Total</label>
-                  <input
-                    type="text" inputMode="decimal"
-                                        value={editingReceipt.total || ""}
-                    onChange={(e) => setEditingReceipt({ ...editingReceipt, total: parseFloat(e.target.value) || 0 })}
-                    className="mt-1 w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-base focus:outline-none focus:border-violet-500"
-                  />
                 </div>
-                <div>
-                  <label className="text-base font-medium text-gray-500">Tax</label>
-                  <input
-                    type="text" inputMode="decimal"
-                                        value={editingReceipt.tax || ""}
-                    onChange={(e) => setEditingReceipt({ ...editingReceipt, tax: parseFloat(e.target.value) || 0 })}
-                    className="mt-1 w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-base focus:outline-none focus:border-violet-500"
-                  />
+              ) : (
+                <div className="rounded-2xl border border-gray-200 bg-white p-6 text-sm text-gray-500 shadow-sm">
+                  No insights yet — add a few receipts first.
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TRENDS TAB */}
+          {tab === "trends" && (
+            <div className="space-y-5">
+              {/* Period Toggle */}
+              <div className="flex justify-center">
+                <div className="inline-flex rounded-xl bg-gray-100 p-1.5 flex-wrap gap-1">
+                  {["daily", "weekly", "monthly", "yearly", "all"].map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => setTrendsPeriod(p)}
+                      className={cn(
+                        "px-4 py-2.5 rounded-lg text-base font-medium transition",
+                        trendsPeriod === p
+                          ? "bg-white text-gray-900 shadow"
+                          : "text-gray-600 hover:text-gray-900"
+                      )}
+                      type="button"
+                    >
+                      {p === "all" ? "All Time" : p.charAt(0).toUpperCase() + p.slice(1)}
+                    </button>
+                  ))}
                 </div>
               </div>
-              <div className="overflow-visible">
-                <label className="text-base font-medium text-gray-500">Category</label>
-                <button
-                  type="button"
-                  onClick={() => setEditCategoryDropdownOpen(!editCategoryDropdownOpen)}
-                  className="mt-1 w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-base focus:outline-none focus:border-violet-500 text-left flex items-center justify-between bg-white overflow-visible"
-                >
-                  <span className={editingReceipt.category ? "text-gray-900" : "text-gray-400"}>
-                    {editingReceipt.category || "Select category"}
-                  </span>
-                  <div className="relative">
-                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                    {editCategoryDropdownOpen && (
-                      <div className="absolute left-full top-1/2 -translate-y-1/2 ml-4 bg-white border border-gray-200 rounded-xl shadow-lg z-[100] max-h-64 overflow-y-auto w-40">
-                        {CATEGORIES.map((cat) => (
-                          <button
-                            key={cat}
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingReceipt({ ...editingReceipt, category: cat });
-                              setEditCategoryDropdownOpen(false);
-                            }}
-                            className={cn(
-                              "w-full px-4 py-3 text-left text-base hover:bg-violet-50 transition",
-                              editingReceipt.category === cat ? "bg-violet-100 text-violet-700 font-medium" : "text-gray-700"
-                            )}
-                          >
-                            {cat}
-                          </button>
-                        ))}
+
+              {/* Custom Date Range Inputs - hidden for now */}
+              {false && trendsPeriod === "custom" && (
+                <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                  <div className="text-lg font-semibold text-gray-900 mb-3">Custom Date Range</div>
+                  <div className="flex gap-3 items-end">
+                    <div className="flex-1">
+                      <label className="text-xs text-gray-500">Start Date</label>
+                      <input
+                        type="date"
+                        value={customStartDate}
+                        onChange={(e) => setCustomStartDate(e.target.value)}
+                        className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-xs text-gray-500">End Date</label>
+                      <input
+                        type="date"
+                        value={customEndDate}
+                        onChange={(e) => setCustomEndDate(e.target.value)}
+                        className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <button
+                      onClick={() =>
+                        refreshTrends("custom", customStartDate, customEndDate).catch((e) =>
+                          setErr(e.message)
+                        )
+                      }
+                      disabled={!customStartDate || !customEndDate}
+                      className={cn(
+                        "px-4 py-2 rounded-lg text-sm font-medium",
+                        customStartDate && customEndDate
+                          ? "bg-black text-white hover:bg-gray-900"
+                          : "bg-gray-200 text-gray-400"
+                      )}
+                      type="button"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {trends ? (
+                <div className="space-y-4">
+                  {/* Summary Stats */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <StatCard
+                      label="Total Spend"
+                      value={`$${Number(trends.total_spend).toFixed(2)}`}
+                    />
+                    <StatCard label="Receipts" value={trends.receipt_count} />
+                  </div>
+
+                  {/* Forecast Card (right after Summary Stats) */}
+                  <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-lg font-semibold text-gray-900">
+                          Future Spend Forecast
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          Baseline = keep habits. Improved = follow plan.
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => refreshForecast(12)}
+                        disabled={forecastLoading}
+                        className={cn(
+                          "px-4 py-2 rounded-xl text-base font-semibold transition-all",
+                          forecastLoading
+                            ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                            : "bg-gradient-to-r from-violet-600 to-indigo-600 text-white hover:from-violet-700 hover:to-indigo-700 shadow"
+                        )}
+                        type="button"
+                      >
+                        {forecastLoading ? "Generating..." : "Generate Forecast"}
+                      </button>
+                    </div>
+
+                    {forecastData?.summary ? (
+                      <div className="mt-4 grid grid-cols-2 gap-3">
+                        <StatCard
+                          label="Estimated savings"
+                          value={`$${Number(forecastData.summary.savings).toFixed(2)}`}
+                          sub={
+                            forecastData?.plan
+                              ? `Cut ${forecastData.plan.top_category} by ${forecastData.plan.reduction_percent}%`
+                              : null
+                          }
+                        />
+                        <StatCard
+                          label="Next 12 weeks total"
+                          value={`$${Number(forecastData.summary.improved_total).toFixed(2)}`}
+                          sub={`Baseline: $${Number(
+                            forecastData.summary.baseline_total
+                          ).toFixed(2)}`}
+                        />
+                      </div>
+                    ) : (
+                      <div className="mt-4 text-sm text-gray-400">
+                        Click “Generate Forecast” to see your projection.
                       </div>
                     )}
-                  </div>
-                </button>
-                {editCategoryDropdownOpen && (
-                  <div className="fixed inset-0 z-[99]" onClick={() => setEditCategoryDropdownOpen(false)} />
-                )}
-              </div>
-            </div>
 
-            <div className="mt-6 flex gap-3">
-              <button
-                onClick={async () => {
-                  try {
-                    await updateReceipt(editingReceipt.id, {
-                      merchant: editingReceipt.merchant,
-                      date: editingReceipt.date,
-                      total: editingReceipt.total,
-                      tax: editingReceipt.tax,
-                      category: editingReceipt.category,
-                    });
-                    setReceipts(receipts.map(r => r.id === editingReceipt.id ? editingReceipt : r));
-                    setEditingReceipt(null);
-                  } catch (e) {
-                    setErr(e.message);
-                  }
-                }}
-                className="flex-1 rounded-xl px-6 py-3 text-base font-semibold text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 transition-all shadow-md"
-                type="button"
-              >
-                Save Changes
-              </button>
-              <button
-                onClick={() => setEditingReceipt(null)}
-                className="rounded-xl px-6 py-3 text-base font-semibold text-gray-700 border-2 border-gray-200 hover:bg-gray-50 transition-all"
-                type="button"
-              >
-                Cancel
-              </button>
+                    {forecastTimeline.length > 0 ? (
+                      <div className="mt-4">
+                        <ResponsiveContainer width="100%" height={280}>
+                          <LineChart data={forecastTimeline}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                            <XAxis dataKey="week" tick={{ fontSize: 12 }} />
+                            <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `$${v}`} />
+                            <Tooltip formatter={(value) => `$${Number(value).toFixed(2)}`} />
+
+                            <Line
+                              type="monotone"
+                              dataKey="history"
+                              name="History"
+                              stroke={COLORS[6 % COLORS.length]}
+                              strokeWidth={2}
+                              dot={{ r: 3 }}
+                            />
+                            <Line
+                              type="monotone"
+                              dataKey="baseline"
+                              name="Baseline"
+                              stroke={COLORS[0 % COLORS.length]}
+                              strokeWidth={2}
+                              dot={{ r: 3 }}
+                            />
+                            <Line
+                              type="monotone"
+                              dataKey="improved"
+                              name="Improved"
+                              stroke={COLORS[2 % COLORS.length]}
+                              strokeWidth={3}
+                              dot={{ r: 3 }}
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {/* Comparison Card */}
+                  {trends.comparison && (
+                    <div
+                      className={cn(
+                        "rounded-2xl border p-4 shadow-sm",
+                        trends.comparison.direction === "up"
+                          ? "border-red-200 bg-red-50"
+                          : trends.comparison.direction === "down"
+                          ? "border-green-200 bg-green-50"
+                          : "border-gray-200 bg-white"
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-2xl">
+                          {trends.comparison.direction === "up"
+                            ? "📈"
+                            : trends.comparison.direction === "down"
+                            ? "📉"
+                            : "➡️"}
+                        </span>
+                        <div>
+                          <div className="text-lg font-semibold text-gray-900">
+                            {trends.comparison.message}
+                          </div>
+                          <div className="text-base text-gray-500">
+                            {trends.period_start} to {trends.period_end}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Pie Chart */}
+                  {Object.keys(trends.spend_by_category || {}).length > 0 ? (
+                    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                      <div className="text-lg font-semibold text-gray-900 mb-4">
+                        Spending by Category
+                      </div>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <PieChart>
+                          <Pie
+                            data={Object.entries(trends.spend_by_category).map(([name, value]) => ({
+                              name,
+                              value: Number(value),
+                            }))}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={50}
+                            outerRadius={90}
+                            paddingAngle={2}
+                            dataKey="value"
+                            label={({ name, percent, cx, cy, midAngle, outerRadius, index }) => {
+                              const RADIAN = Math.PI / 180;
+                              const radius = outerRadius + 25;
+                              const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                              const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                              return (
+                                <text
+                                  x={x}
+                                  y={y}
+                                  fill={COLORS[index % COLORS.length]}
+                                  textAnchor={x > cx ? "start" : "end"}
+                                  dominantBaseline="central"
+                                  style={{ fontSize: "14px", fontWeight: "600" }}
+                                >
+                                  {`${name} ${(percent * 100).toFixed(0)}%`}
+                                </text>
+                              );
+                            }}
+                            labelLine={false}
+                          >
+                            {Object.entries(trends.spend_by_category).map((_, index) => (
+                              <Cell
+                                key={`cell-${index}`}
+                                fill={COLORS[index % COLORS.length]}
+                              />
+                            ))}
+                          </Pie>
+                          <Tooltip formatter={(value) => `$${Number(value).toFixed(2)}`} />
+                        </PieChart>
+                      </ResponsiveContainer>
+
+                      {/* Category Legend with amounts */}
+                      <div className="mt-4 space-y-2">
+                        {Object.entries(trends.spend_by_category).map(([cat, amount], idx) => (
+                          <div key={cat} className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="w-3 h-3 rounded-full"
+                                style={{ backgroundColor: COLORS[idx % COLORS.length] }}
+                              />
+                              <span className="text-sm text-gray-700">{cat}</span>
+                            </div>
+                            <span className="text-lg font-semibold text-gray-900">
+                              ${Number(amount).toFixed(2)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-gray-200 bg-white p-6 text-center shadow-sm">
+                      <div className="text-5xl mb-3">📊</div>
+                      <div className="text-lg text-gray-500">No spending data for this period.</div>
+                      <div className="text-base text-gray-400 mt-2">
+                        Add some receipts to see your trends!
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Spending Over Time Chart */}
+                  {chartsData?.spending_over_time?.length > 0 && (
+                    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                      <div className="text-lg font-semibold text-gray-900 mb-4">
+                        Spending Over Time
+                      </div>
+                      <ResponsiveContainer width="100%" height={250}>
+                        <BarChart data={chartsData.spending_over_time}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                          <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `$${v}`} />
+                          <Tooltip formatter={(value) => `$${Number(value).toFixed(2)}`} />
+                          <Bar dataKey="amount" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+
+                  {/* Top Merchants Chart */}
+                  {chartsData?.top_merchants?.length > 0 && (
+                    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                      <div className="text-lg font-semibold text-gray-900 mb-4">Top Merchants</div>
+                      <ResponsiveContainer
+                        width="100%"
+                        height={Math.max(200, chartsData.top_merchants.length * 40)}
+                      >
+                        <BarChart data={chartsData.top_merchants} layout="vertical">
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis
+                            type="number"
+                            tick={{ fontSize: 12 }}
+                            tickFormatter={(v) => `$${v}`}
+                          />
+                          <YAxis
+                            type="category"
+                            dataKey="merchant"
+                            tick={{ fontSize: 12 }}
+                            width={100}
+                          />
+                          <Tooltip
+                            formatter={(value) => [`$${Number(value).toFixed(2)}`, "Total"]}
+                            labelFormatter={(label) => label}
+                          />
+                          <Bar dataKey="amount" fill="#06b6d4" radius={[0, 4, 4, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+
+                  {/* Category Trends Chart */}
+                  {chartsData?.category_trends?.length > 0 && (
+                    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                      <div className="text-lg font-semibold text-gray-900 mb-4">
+                        Category Trends
+                      </div>
+                      <ResponsiveContainer width="100%" height={250}>
+                        <LineChart data={chartsData.category_trends}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                          <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `$${v}`} />
+                          <Tooltip formatter={(value) => `$${Number(value).toFixed(2)}`} />
+                          {chartsData.category_trends[0] &&
+                            Object.keys(chartsData.category_trends[0].categories || {}).map(
+                              (cat, idx) => (
+                                <Line
+                                  key={cat}
+                                  type="monotone"
+                                  dataKey={`categories.${cat}`}
+                                  name={cat}
+                                  stroke={COLORS[idx % COLORS.length]}
+                                  strokeWidth={2}
+                                  dot={{ r: 4 }}
+                                />
+                              )
+                            )}
+                        </LineChart>
+                      </ResponsiveContainer>
+
+                      <div className="mt-3 flex flex-wrap gap-3 justify-center">
+                        {chartsData.category_trends[0] &&
+                          Object.keys(chartsData.category_trends[0].categories || {}).map(
+                            (cat, idx) => (
+                              <div key={cat} className="flex items-center gap-1">
+                                <div
+                                  className="w-3 h-3 rounded-full"
+                                  style={{ backgroundColor: COLORS[idx % COLORS.length] }}
+                                />
+                                <span className="text-sm text-gray-600">{cat}</span>
+                              </div>
+                            )
+                          )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Day of Week Chart */}
+                  {chartsData?.day_of_week?.length > 0 && (
+                    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                      <div className="text-lg font-semibold text-gray-900 mb-4">
+                        Spending by Day of Week
+                      </div>
+                      <ResponsiveContainer width="100%" height={200}>
+                        <BarChart data={chartsData.day_of_week}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis dataKey="day" tick={{ fontSize: 12 }} />
+                          <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `$${v}`} />
+                          <Tooltip
+                            formatter={(value) => [`$${Number(value).toFixed(2)}`, "Total"]}
+                          />
+                          <Bar dataKey="amount" fill="#10b981" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+
+                  {/* Story Section */}
+                  {insights && (
+                    <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+                      <div className="text-xl font-semibold text-gray-900">Story</div>
+                      <ul className="mt-3 list-disc space-y-2 pl-5 text-base text-gray-700">
+                        {(insights.story_insights || []).map((s, i) => (
+                          <li key={i}>{s}</li>
+                        ))}
+                      </ul>
+                      <div className="mt-4 rounded-xl bg-gray-50 p-4 text-base font-medium text-gray-900">
+                        {insights.recommendation}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-gray-200 bg-white p-6 text-sm text-gray-500 shadow-sm text-center">
+                  Loading trends...
+                </div>
+              )}
             </div>
-          </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Chat Panel - slides in from right */}
       <div
@@ -1156,7 +1341,13 @@ async function handleSendChat() {
             className="p-1 hover:bg-gray-100 rounded-lg transition"
             type="button"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5 text-gray-500"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </button>

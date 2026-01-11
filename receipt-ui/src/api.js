@@ -57,6 +57,13 @@ export async function getChartsData(period = "all") {
   return await res.json();
 }
 
+export async function getForecast(horizon = 12) {
+  const res = await fetch(`${API_BASE}/advisor/forecast?horizon=${encodeURIComponent(horizon)}`);
+  if (!res.ok) throw new Error(`Forecast failed (${res.status})`);
+  return await res.json();
+}
+
+
 export async function deleteReceipt(receiptId) {
   const res = await fetch(`${API_BASE}/receipts/${encodeURIComponent(receiptId)}`, {
     method: "DELETE",
