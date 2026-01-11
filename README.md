@@ -175,7 +175,7 @@ Requires:
 ```curl -s -X POST "http://localhost:8000/receipts/parse" \```
 ```-F "file=@/path/to/receipt.jpg"```
 
-##Troubleshooting
+## Troubleshooting
 
 **“ModuleNotFoundError: receipt_story”**
 
@@ -190,7 +190,7 @@ include ```--app-dir src```
 ```lsof -nP -iTCP:8000 | grep LISTEN```
 ```kill -9 <PID>```
 
-##Hybrid fallback not triggering
+## Hybrid fallback not triggering
 
 Confirm ```EXTRACTION_BACKEND=hybrid```
 
@@ -198,7 +198,8 @@ Confirm ```OPENAI_API_KEY``` is set
 
 For testing: set ```RECEIPT_FORCE_VISION=true``` (if supported by your backend)
 
-##Contributing / Workflow
+
+## Contributing / Workflow
 
 -Create a branch from development
 
