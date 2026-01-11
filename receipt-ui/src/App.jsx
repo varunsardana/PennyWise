@@ -664,7 +664,7 @@ export default function App() {
             {/* Period Toggle - Apple Health Style */}
             <div className="flex justify-center">
               <div className="inline-flex rounded-xl bg-gray-100 p-1.5 flex-wrap gap-1">
-                {["daily", "weekly", "monthly", "yearly", "all"].map((p) => (
+                {["custom", "daily", "weekly", "monthly", "yearly", "all"].map((p) => (
                   <button
                     key={p}
                     onClick={() => setTrendsPeriod(p)}
@@ -676,53 +676,55 @@ export default function App() {
                     )}
                     type="button"
                   >
-                    {p === "all" ? "All Time" : p.charAt(0).toUpperCase() + p.slice(1)}
+                    {p === "all" ? "All Time" : p === "custom" ? "Custom" : p.charAt(0).toUpperCase() + p.slice(1)}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Custom Date Range Inputs - hidden for now, using All Time instead */}
-            {false && trendsPeriod === "custom" && (
-              <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-                <div className="text-lg font-semibold text-gray-900 mb-3">Custom Date Range</div>
-                <div className="flex gap-3 items-end">
-                  <div className="flex-1">
-                    <label className="text-xs text-gray-500">Start Date</label>
-                    <input
-                      type="date"
-                      value={customStartDate}
-                      onChange={(e) => setCustomStartDate(e.target.value)}
-                      className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <label className="text-xs text-gray-500">End Date</label>
-                    <input
-                      type="date"
-                      value={customEndDate}
-                      onChange={(e) => setCustomEndDate(e.target.value)}
-                      className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-                    />
-                  </div>
-                  <button
-                    onClick={() => refreshTrends("custom", customStartDate, customEndDate).catch((e) => setErr(e.message))}
-                    disabled={!customStartDate || !customEndDate}
-                    className={cn(
-                      "px-4 py-2 rounded-lg text-sm font-medium",
-                      customStartDate && customEndDate
-                        ? "bg-black text-white hover:bg-gray-900"
-                        : "bg-gray-200 text-gray-400"
-                    )}
-                    type="button"
-                  >
-                    Apply
-                  </button>
-                </div>
+            {/* Custom Date Range */}
+            {trendsPeriod === "custom" && (
+              <div className="flex items-center gap-3 justify-center flex-wrap">
+                <input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  className="rounded-xl border border-gray-200 px-3 py-2 text-base"
+                />
+                <span className="text-gray-400">to</span>
+                <input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => setCustomEndDate(e.target.value)}
+                  className="rounded-xl border border-gray-200 px-3 py-2 text-base"
+                />
+                <button
+                  onClick={() => {
+                    refreshTrends("custom", customStartDate, customEndDate).catch((e) => setErr(e.message));
+                    refreshChartsData("custom").catch((e) => setErr(e.message));
+                  }}
+                  disabled={!customStartDate || !customEndDate}
+                  className={cn(
+                    "px-5 py-2 rounded-xl text-base font-semibold transition-all",
+                    customStartDate && customEndDate
+                      ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white hover:from-violet-700 hover:to-indigo-700 shadow-md"
+                      : "bg-gray-200 text-gray-400"
+                  )}
+                  type="button"
+                >
+                  Apply
+                </button>
               </div>
             )}
 
-            {trends ? (
+            {/* If custom selected but no dates, prompt user */}
+            {trendsPeriod === "custom" && (!customStartDate || !customEndDate) ? (
+              <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
+                <div className="text-5xl mb-3">📅</div>
+                <div className="text-lg font-medium text-gray-700">Select a date range</div>
+                <div className="text-base text-gray-400 mt-1">Choose start and end dates above to see your spending trends</div>
+              </div>
+            ) : trends ? (
               <div className="space-y-4">
                 {/* Summary Stats */}
                 <div className="grid grid-cols-2 gap-3">
@@ -736,8 +738,8 @@ export default function App() {
                   />
                 </div>
 
-                {/* Comparison Card */}
-                {trends.comparison && (
+                {/* Comparison Card - hide for custom date range */}
+                {trends.comparison && trendsPeriod !== "custom" && (
                   <div className={cn(
                     "rounded-2xl border p-4 shadow-sm",
                     trends.comparison.direction === "up"
