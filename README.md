@@ -82,7 +82,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 ```
 
-** 3) Install backend dependencies**
+**3) Install backend dependencies**
 ```
 pip install -r requirements.txt
 ```
@@ -109,9 +109,9 @@ ANTHROPIC_API_KEY=your_anthropic_key_here
 OPENAI_API_KEY=your_openai_key_here
 ```
 
-**Run the backend (port 8000)
+Run the backend (port 8000)
 
-Run this from inside backend/ (with the venv activated):**
+**Run this from inside backend/ (with the venv activated):**
 ```
 uvicorn receipt_story.main:app --app-dir src --host 0.0.0.0 --port 8000
 ```
@@ -122,9 +122,9 @@ http://localhost:8000/docs
 
 ## Frontend Setup (React + Vite)
 
-**6) Install frontend dependencies
+**6) Install frontend dependencies**
 
-Open a new terminal:**
+Open a new terminal:
 
 ```
 cd receipt-ui
@@ -141,14 +141,14 @@ npm run dev
 
 http://localhost:5173
 
-##How Extraction Works
+## How Extraction Works
 
 The receipt pipeline supports multiple modes (controlled by ```EXTRACTION_BACKEND```):
 
 ```easyocr```→ OCR-only extraction
 ```hybrid```→ OCR-first extraction + vision fallback when needed
 
-##Vision fallback (OpenAI)
+## Vision fallback (OpenAI)
 
 When OCR confidence is low or key fields are missing, the backend can call OpenAI Vision to extract receipt fields more reliably.
 Requires:
@@ -164,11 +164,11 @@ Requires:
 
 ##Useful Commands
 
-**Backend health check
+**Backend health check**
 
 ```curl -s http://localhost:8000/health```
 
-##Test receipt parsing (example)
+## Test receipt parsing (example)
 
 (Adjust endpoint/field name if your route expects a different form key.)
 
