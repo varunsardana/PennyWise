@@ -8,6 +8,63 @@ PennyWise is a lightweight personal finance tracker that lets you:
 - 💾 Store receipts in **SQLite**
 - 📈 View **history + trends + simple forecasting** in a clean React dashboard
 
+---
+
+## Features
+
+- Upload a receipt image → extract:
+  - merchant, date, currency, subtotal/tax/total, category (and more)
+- Hybrid extraction pipeline:
+  - **OCR-first** (fast, local)
+  - Optional **Vision LLM fallback** for difficult receipts
+- Save receipts to **SQLite**
+- Insights / trends endpoints for dashboards
+- Chatbot support (Anthropic)
+
+ ---
+
+## Tech Stack
+
+**Backend**
+- Python + FastAPI
+- EasyOCR + OpenCV preprocessing
+- SQLite (local dev)
+
+**Frontend**
+- React + Vite
+
+**LLMs**
+- **Anthropic API key** → chatbot
+- **OpenAI API key** → vision fallback extraction
+
+---
+
+## Repository Structure
+
+```text
+PennyWise/
+├─ backend/
+│  ├─ src/
+│  │  └─ receipt_story/
+│  │     ├─ api/                 # FastAPI routes (receipts, insights, trends, etc.)
+│  │     ├─ core/                # settings/config
+│  │     ├─ db/                  # SQLite engine + CRUD + tables
+│  │     └─ services/
+│  │        ├─ extraction/       # OCR + hybrid extraction pipeline
+│  │        ├─ trends.py
+│  │        └─ categorize.py
+│  ├─ data/
+│  │  └─ receipts.db             # local SQLite DB
+│  ├─ requirements.txt
+│  ├─ .env.example
+│  └─ README.md
+├─ receipt-ui/
+│  ├─ src/
+│  ├─ package.json
+│  └─ vite.config.*
+└─ README.md
+
+
 
 
 
