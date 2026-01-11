@@ -138,3 +138,14 @@ def list_receipts(db: Session = Depends(get_db)):
         }
         for r in rows
     ]
+
+
+@router.delete("/{receipt_id}")
+def delete_receipt(receipt_id: str, db: Session = Depends(get_db)):
+    """
+    Delete a receipt by ID.
+    """
+    success = crud.delete_receipt(db, receipt_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Receipt not found")
+    return {"success": True, "message": "Receipt deleted"}

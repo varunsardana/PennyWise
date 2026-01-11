@@ -56,3 +56,30 @@ export async function getChartsData(period = "all") {
   if (!res.ok) throw new Error(`Charts failed (${res.status})`);
   return await res.json();
 }
+
+export async function deleteReceipt(receiptId) {
+  const res = await fetch(`${API_BASE}/receipts/${encodeURIComponent(receiptId)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(`Delete failed (${res.status})`);
+  return await res.json();
+}
+
+export async function sendChatMessage(message, conversationHistory = null) {
+  const res = await fetch(`${API_BASE}/chatbot/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message,
+      conversation_history: conversationHistory,
+    }),
+  });
+  if (!res.ok) throw new Error(`Chat failed (${res.status})`);
+  return await res.json();
+}
+
+export async function getChatSuggestions() {
+  const res = await fetch(`${API_BASE}/chatbot/suggestions`);
+  if (!res.ok) throw new Error(`Suggestions failed (${res.status})`);
+  return await res.json();
+}
