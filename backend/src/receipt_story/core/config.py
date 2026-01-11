@@ -9,6 +9,6 @@ class Settings(BaseSettings):
     PORT: int = 8000
 
     DATABASE_URL: str = "sqlite:///./data/receipts.db"
-    EXTRACTION_BACKEND: str = "easyocr"
+    EXTRACTION_BACKEND: str = "hybrid"
 
 settings = Settings()
