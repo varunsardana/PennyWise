@@ -17,3 +17,6 @@ rapidfuzz==3.9.7
 
 # Date parsing
 dateparser==1.2.0
+
+# Chatbot
+anthropic>=0.75.0
