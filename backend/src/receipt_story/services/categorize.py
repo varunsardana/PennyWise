@@ -16,6 +16,9 @@ MERCHANT_RULES = {
     "WALMART": "Shopping",
     "CVS": "Health",
     "WALGREENS": "Health",
+    "CHIPOTLE": "Dining",
+    "MCDONALD": "Dining",
+    "SUBWAY": "Dining",
 }
 
 def normalize_merchant(name: str) -> str:

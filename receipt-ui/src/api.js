@@ -57,6 +57,13 @@ export async function getChartsData(period = "all") {
   return await res.json();
 }
 
+export async function getForecast(horizon = 12) {
+  const res = await fetch(`${API_BASE}/advisor/forecast?horizon=${encodeURIComponent(horizon)}`);
+  if (!res.ok) throw new Error(`Forecast failed (${res.status})`);
+  return await res.json();
+}
+
+
 export async function deleteReceipt(receiptId) {
   const res = await fetch(`${API_BASE}/receipts/${encodeURIComponent(receiptId)}`, {
     method: "DELETE",
@@ -75,17 +82,68 @@ export async function updateReceipt(receiptId, payload) {
   return await res.json();
 }
 
-export async function sendChatMessage(message, conversationHistory = null) {
-  const res = await fetch(`${API_BASE}/chatbot/chat`, {
+export async function sendChatMessage(message, conversationHistory = null, lastBudgetContext = null, extra = {}) {
+  const res = await fetch(`${API_BASE}/message`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       message,
       conversation_history: conversationHistory,
+      budget_context: lastBudgetContext,
+      ...extra
     }),
   });
-  if (!res.ok) throw new Error(`Chat failed (${res.status})`);
-  return await res.json();
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Message failed (${res.status}): ${text}`);
+  }
+
+  const data = await res.json();
+
+  // Enhance UI-ready response based on type
+  let uiMessage = data.response || "";
+
+  if (data.type === "budget_status" && data.has_budget && data.status) {
+    // Format a nice summary
+    const plan = data.plan;
+    const status = data.status;
+    const lines = [
+      `📊 Your ${plan.period} budget: $${plan.total_budget.toFixed(2)}`,
+      `💰 Savings goal: $${plan.savings_goal.toFixed(2)}`,
+      "\nCategory breakdown:"
+    ];
+
+    for (const [cat, info] of Object.entries(status.by_category)) {
+      lines.push(
+        `- ${cat}: Budgeted $${info.budgeted.toFixed(2)}, Spent $${info.actual.toFixed(2)}, Remaining $${info.remaining.toFixed(2)} (${info.percent_used}%)`
+      );
+    }
+
+    if (status.overall) {
+      lines.push(
+        `\nOverall: Spent $${status.overall.actual.toFixed(2)}, Remaining $${status.overall.remaining.toFixed(2)} (${status.overall.percent_used}%)`
+      );
+    }
+
+    uiMessage = lines.join("\n");
+  }
+
+  // Optional: add extra info for planning proposals
+  const extras = {};
+  if (data.type === "planning" || data.type === "planning_refine") {
+    if (data.budget_proposal) {
+      extras.budgetProposal = data.budget_proposal;
+    }
+    extras.stage = data.stage || "conversation";
+    extras.readyToSave = data.ready_to_save || false;
+  }
+
+  return {
+    ...data,
+    response: uiMessage,
+    ...extras
+  };
 }
 
 export async function getChatSuggestions() {
