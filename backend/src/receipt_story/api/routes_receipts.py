@@ -149,3 +149,29 @@ def delete_receipt(receipt_id: str, db: Session = Depends(get_db)):
     if not success:
         raise HTTPException(status_code=404, detail="Receipt not found")
     return {"success": True, "message": "Receipt deleted"}
+
+
+@router.put("/{receipt_id}")
+def update_receipt(receipt_id: str, payload: SaveReceiptRequest, db: Session = Depends(get_db)):
+    """
+    Update a receipt by ID.
+    """
+    rec = crud.update_receipt(
+        db=db,
+        receipt_id=receipt_id,
+        merchant=payload.merchant,
+        date=payload.date,
+        total=payload.total,
+        tax=payload.tax,
+        category=payload.category,
+    )
+    if not rec:
+        raise HTTPException(status_code=404, detail="Receipt not found")
+    return {
+        "id": rec.id,
+        "merchant": rec.merchant,
+        "date": rec.date,
+        "total": rec.total,
+        "tax": rec.tax,
+        "category": rec.category,
+    }
