@@ -72,6 +72,387 @@ function Money({ v }) {
   return <span>${Number(v).toFixed(2)}</span>;
 }
 
+// Left Dashboard - unified panel with tips and stats
+function LeftDashboard({ receipts }) {
+  const tips = [
+    { icon: "💡", title: "50/30/20 Rule", text: "Spend 50% on needs, 30% on wants, 20% on savings" },
+    { icon: "🎯", title: "Track Everything", text: "Small purchases add up - track every receipt!" },
+    { icon: "☕", title: "Latte Factor", text: "That $5 daily coffee = $1,825/year. Small changes matter!" },
+    { icon: "🏦", title: "Pay Yourself First", text: "Save before you spend, not after" },
+    { icon: "📊", title: "Review Weekly", text: "Check your spending every week to stay on track" },
+    { icon: "🛒", title: "List Before Shopping", text: "Make a list and stick to it - avoid impulse buys" },
+    { icon: "💳", title: "Wait 24 Hours", text: "Sleep on big purchases to avoid buyer's remorse" },
+    { icon: "🎁", title: "Reward Yourself", text: "Budget for fun too - sustainable saving needs balance" },
+  ];
+
+  const [currentTip, setCurrentTip] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTip((prev) => (prev + 1) % tips.length);
+    }, 6000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const tip = tips[currentTip];
+
+  const stats = useMemo(() => {
+    if (!receipts || receipts.length === 0) return null;
+
+    const total = receipts.reduce((sum, r) => sum + (r.total || 0), 0);
+    const avg = total / receipts.length;
+
+    const categoryCount = {};
+    receipts.forEach(r => {
+      if (r.category) {
+        categoryCount[r.category] = (categoryCount[r.category] || 0) + 1;
+      }
+    });
+    const topCategory = Object.entries(categoryCount).sort((a, b) => b[1] - a[1])[0];
+    const categoryCountNum = Object.keys(categoryCount).length;
+
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const thisWeek = receipts.filter(r => {
+      if (!r.date) return false;
+      const d = new Date(r.date);
+      return d >= weekAgo;
+    });
+    const weekTotal = thisWeek.reduce((sum, r) => sum + (r.total || 0), 0);
+
+    return { total, avg, count: receipts.length, topCategory: topCategory ? topCategory[0] : 'N/A', weekTotal, categoryCountNum };
+  }, [receipts]);
+
+  // Achievement badges - reward good tracking habits, not spending!
+  const badges = useMemo(() => {
+    const count = stats?.count || 0;
+    const categories = stats?.categoryCountNum || 0;
+
+    return [
+      { id: 1, icon: "🎯", name: "First Penny", requirement: "Track 1 receipt", unlocked: count >= 1 },
+      { id: 2, icon: "📝", name: "Getting Started", requirement: "Track 5 receipts", unlocked: count >= 5 },
+      { id: 3, icon: "🔥", name: "On Fire", requirement: "Track 10 receipts", unlocked: count >= 10 },
+      { id: 4, icon: "⭐", name: "Dedicated", requirement: "Track 25 receipts", unlocked: count >= 25 },
+      { id: 5, icon: "👑", name: "Tracking Pro", requirement: "Track 50 receipts", unlocked: count >= 50 },
+      { id: 6, icon: "🌈", name: "Explorer", requirement: "Use 3+ categories", unlocked: categories >= 3 },
+      { id: 7, icon: "🏆", name: "Organizer", requirement: "Use 5+ categories", unlocked: categories >= 5 },
+      { id: 8, icon: "💰", name: "Budget Boss", requirement: "Stay under budget", unlocked: false }, // Coming soon with budgets!
+    ];
+  }, [stats]);
+
+  return (
+    <div className="fixed bottom-4 left-4 w-[420px] z-[100] space-y-3">
+      {/* Achievement Badges - TOP */}
+      <div className="bg-white/95 backdrop-blur rounded-2xl shadow-lg border border-gray-100 p-6">
+        <div className="text-base font-semibold text-gray-400 uppercase tracking-wide mb-5">Achievements</div>
+        <div className="grid grid-cols-4 gap-4">
+          {badges.map((badge) => (
+            <div
+              key={badge.id}
+              className="relative group cursor-pointer p-2 rounded-xl"
+            >
+              <div className={cn(!badge.unlocked && "opacity-40 grayscale")}>
+                <div className={cn(
+                  "w-16 h-16 rounded-xl flex items-center justify-center text-3xl transition-transform group-hover:scale-110 mx-auto",
+                  badge.unlocked
+                    ? "bg-gradient-to-br from-amber-400 to-orange-500 shadow-md"
+                    : "bg-gray-200"
+                )}>
+                  {badge.icon}
+                </div>
+                <div className="text-xs text-center mt-2 font-medium text-gray-600 truncate">
+                  {badge.name}
+                </div>
+              </div>
+              {badge.unlocked && (
+                <div className="absolute top-1 right-1 w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center">
+                  <span className="text-white text-xs">✓</span>
+                </div>
+              )}
+              {/* Hover popup */}
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-4 py-3 bg-gray-900 text-white text-sm rounded-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl">
+                <div className="font-bold text-base">{badge.name}</div>
+                <div className="text-white mt-1">{badge.requirement}</div>
+                <div className="absolute top-full left-1/2 -translate-x-1/2 border-[6px] border-transparent border-t-gray-900"></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Tips Card */}
+      <div className="bg-gradient-to-br from-violet-500 to-indigo-600 rounded-2xl shadow-lg p-6 text-white h-[160px] flex flex-col">
+        <div className="flex items-start gap-4 flex-1">
+          <div className="text-4xl">{tip.icon}</div>
+          <div className="flex-1">
+            <div className="font-bold text-lg">{tip.title}</div>
+            <div className="text-violet-100 text-base mt-1 leading-relaxed">{tip.text}</div>
+          </div>
+        </div>
+        <div className="flex justify-center gap-2 mt-auto pt-3">
+          {tips.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setCurrentTip(i)}
+              className={cn(
+                "h-2 rounded-full transition-all",
+                i === currentTip ? "bg-white w-5" : "bg-white/40 w-2"
+              )}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Stats Card */}
+      <div className="bg-white/95 backdrop-blur rounded-2xl shadow-lg border border-gray-100 p-6">
+        <div className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-4">Your Stats</div>
+        {stats ? (
+          <div className="grid grid-cols-2 gap-5">
+            <div>
+              <div className="text-3xl font-bold text-violet-600">${stats.weekTotal.toFixed(0)}</div>
+              <div className="text-sm text-gray-500">This Week</div>
+            </div>
+            <div>
+              <div className="text-3xl font-bold text-gray-800">{stats.count}</div>
+              <div className="text-sm text-gray-500">Receipts</div>
+            </div>
+            <div>
+              <div className="text-3xl font-bold text-gray-800">${stats.avg.toFixed(0)}</div>
+              <div className="text-sm text-gray-500">Average</div>
+            </div>
+            <div>
+              <div className="text-xl font-bold text-emerald-600">{stats.topCategory}</div>
+              <div className="text-sm text-gray-500">Top Category</div>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-4">
+            <div className="text-gray-400 text-base">No receipts yet</div>
+            <div className="text-gray-500 text-sm mt-1">Scan your first receipt!</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Cute piggy bank SVG - front view
+function PiggyBank({ size = 120 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* Body */}
+      <circle cx="50" cy="50" r="40" fill="#F8BBD9"/>
+      {/* Left ear */}
+      <ellipse cx="20" cy="18" rx="10" ry="14" fill="#F8BBD9"/>
+      <ellipse cx="20" cy="18" rx="6" ry="8" fill="#E891AB"/>
+      {/* Right ear */}
+      <ellipse cx="80" cy="18" rx="10" ry="14" fill="#F8BBD9"/>
+      <ellipse cx="80" cy="18" rx="6" ry="8" fill="#E891AB"/>
+      {/* Left eye */}
+      <circle cx="35" cy="42" r="10" fill="white"/>
+      <circle cx="37" cy="43" r="6" fill="#333"/>
+      <circle cx="39" cy="41" r="2.5" fill="white"/>
+      {/* Right eye */}
+      <circle cx="65" cy="42" r="10" fill="white"/>
+      <circle cx="67" cy="43" r="6" fill="#333"/>
+      <circle cx="69" cy="41" r="2.5" fill="white"/>
+      {/* Snout */}
+      <ellipse cx="50" cy="62" rx="16" ry="12" fill="#E891AB"/>
+      {/* Nostrils */}
+      <ellipse cx="44" cy="62" rx="3.5" ry="5" fill="#C97087"/>
+      <ellipse cx="56" cy="62" rx="3.5" ry="5" fill="#C97087"/>
+      {/* Legs */}
+      <ellipse cx="35" cy="88" rx="8" ry="10" fill="#F8BBD9"/>
+      <ellipse cx="65" cy="88" rx="8" ry="10" fill="#F8BBD9"/>
+    </svg>
+  );
+}
+
+// Chaotic penny rain - coins fall and stay where they land
+function FallingCoins({ show, onComplete }) {
+  const [coins, setCoins] = useState([]);
+
+  useEffect(() => {
+    if (!show) return;
+
+    const numCoins = 80;
+    const allCoins = [];
+
+    for (let i = 0; i < numCoins; i++) {
+      const finalLeftPx = 220 + Math.random() * 180; // Next to pig (220-400px from left)
+      const finalBottomPx = 5 + Math.random() * 55;
+
+      allCoins.push({
+        id: i,
+        finalLeftPx,
+        finalBottomPx,
+        delay: Math.random() * 5,
+        duration: 2.5 + Math.random() * 1.5, // 2.5-4s fall
+        size: 26 + Math.random() * 6,
+        spinSpeed: 0.5 + Math.random() * 0.3,
+        tiltX: 55 + Math.random() * 25,
+        tiltZ: Math.random() * 50 - 25,
+        zIndex: Math.floor(Math.random() * 50),
+        spinStart: Math.random() * 360,
+      });
+    }
+
+    setCoins(allCoins);
+
+    const doneTimer = setTimeout(() => {
+      onComplete?.();
+    }, 10000);
+
+    return () => clearTimeout(doneTimer);
+  }, [show]);
+
+  if (!coins.length) return null;
+
+  return (
+    <div className="fixed inset-0 pointer-events-none z-[200] overflow-hidden">
+      {/* Piggy bank in corner */}
+      <div className="fixed bottom-2 left-4 z-[201]">
+        <PiggyBank size={160} />
+      </div>
+
+      {coins.map((coin) => {
+        const spinIterations = Math.ceil(coin.duration / coin.spinSpeed);
+        return (
+          <div
+            key={coin.id}
+            className="absolute will-change-transform"
+            style={{
+              left: coin.finalLeftPx,
+              bottom: coin.finalBottomPx,
+              zIndex: coin.zIndex,
+              animation: `fall ${coin.duration}s linear ${coin.delay}s both`,
+            }}
+          >
+            <div
+              style={{
+                animation: `spin-${coin.id} ${coin.spinSpeed}s linear ${coin.delay}s ${spinIterations}`,
+              }}
+            >
+              <Penny3D size={coin.size} tiltX={coin.tiltX} tiltZ={coin.tiltZ} />
+            </div>
+          </div>
+        );
+      })}
+
+      <style>{`
+        @keyframes fall {
+          0% { transform: translateY(calc(-100vh - 150px)); }
+          100% { transform: translateY(0); }
+        }
+        ${coins.map(coin => `
+          @keyframes spin-${coin.id} {
+            0% { transform: rotateX(${coin.spinStart}deg) rotateY(0deg); }
+            100% { transform: rotateX(${coin.spinStart + 720}deg) rotateY(360deg); }
+          }
+        `).join('\n')}
+      `}</style>
+    </div>
+  );
+}
+
+// 3D Penny component - shiny copper with warmth
+function Penny3D({ size, tiltX = 65, tiltZ = 0 }) {
+  const thickness = 8;
+
+  return (
+    <div
+      className="relative"
+      style={{
+        width: size,
+        height: size,
+        transformStyle: "preserve-3d",
+        transform: `rotateX(${tiltX}deg) rotateZ(${tiltZ}deg)`,
+      }}
+    >
+      {/* Top face - warm copper with shine */}
+      <div
+        className="absolute inset-0 rounded-full"
+        style={{
+          background: `
+            radial-gradient(ellipse at 25% 25%, rgba(255,255,255,0.9) 0%, transparent 18%),
+            radial-gradient(ellipse at 35% 35%, #e8c39e 0%, transparent 35%),
+            radial-gradient(ellipse at 70% 70%, #8b4513 0%, transparent 45%),
+            linear-gradient(135deg, #cd7f32 0%, #b87333 25%, #a0522d 50%, #b87333 75%, #cd7f32 100%)
+          `,
+          boxShadow: `
+            inset 0 3px 8px rgba(255,220,180,0.7),
+            inset 0 -2px 6px rgba(101,67,33,0.5),
+            0 3px 10px rgba(0,0,0,0.35)
+          `,
+          border: "1.5px solid #8b4513",
+          transform: `translateZ(${thickness / 2}px)`,
+        }}
+      >
+        {/* Inner rim */}
+        <div
+          className="absolute rounded-full border border-amber-800/40"
+          style={{ inset: 2 }}
+        />
+        {/* Cent symbol */}
+        <div
+          className="absolute inset-0 flex items-center justify-center font-bold"
+          style={{
+            fontSize: size * 0.4,
+            color: "#5c3317",
+            textShadow: "0 1px 2px rgba(255,200,150,0.5)",
+          }}
+        >
+          ¢
+        </div>
+        {/* Shine highlight */}
+        <div
+          className="absolute inset-0 rounded-full"
+          style={{
+            background: `
+              linear-gradient(110deg, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0.4) 12%, transparent 35%),
+              linear-gradient(280deg, rgba(255,200,150,0.3) 0%, transparent 20%)
+            `,
+          }}
+        />
+      </div>
+
+      {/* Bottom face */}
+      <div
+        className="absolute rounded-full"
+        style={{
+          width: size,
+          height: size,
+          background: "linear-gradient(to bottom, #8b4513 0%, #6b3a1a 50%, #4a2810 100%)",
+          transform: `translateZ(${-thickness / 2}px)`,
+          boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
+        }}
+      />
+
+      {/* Side edge - warm copper */}
+      {Array.from({ length: thickness }).map((_, i) => (
+        <div
+          key={i}
+          className="absolute rounded-full"
+          style={{
+            width: size,
+            height: size,
+            background: `linear-gradient(to right,
+              #6b3a1a 0%,
+              #b87333 15%,
+              #cd7f32 30%,
+              #b87333 50%,
+              #8b4513 70%,
+              #b87333 85%,
+              #6b3a1a 100%
+            )`,
+            transform: `translateZ(${thickness / 2 - i}px)`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 export default function App() {
   const [tab, setTab] = useState("scan");
   const [file, setFile] = useState(null);
@@ -97,7 +478,10 @@ export default function App() {
   const [editingReceipt, setEditingReceipt] = useState(null);
   const [chatWidth, setChatWidth] = useState(400);
   const [isResizing, setIsResizing] = useState(false);
-  const [hasResized, setHasResized] = useState(false);
+  const [hasResized, setHasResized] = useState(false);  // Track if user manually resized
+  const [showCoins, setShowCoins] = useState(false);  // Disabled for now
+
+  const CATEGORIES = ["Groceries", "Dining", "Gas", "Shopping", "Entertainment", "Healthcare", "Travel", "Utilities", "Other"];
 
   const COLORS = [
     "#8b5cf6",
@@ -156,6 +540,10 @@ export default function App() {
     setChartsData(data);
   }
 
+  // Load receipts on startup for the stats dashboard
+  useEffect(() => {
+    refreshReceipts().catch(() => {});
+  }, []);
   async function refreshForecast(horizon = 12) {
     setForecastLoading(true);
     try {
@@ -285,6 +673,11 @@ export default function App() {
   }
 
   return (
+    <>
+    {/* Falling coins animation on load */}
+    <FallingCoins show={showCoins} onComplete={() => setShowCoins(false)} />
+    <LeftDashboard receipts={receipts} />
+
     <div className="h-screen flex flex-col bg-gray-50 transition-all duration-300" style={{ marginRight: chatOpen && hasResized ? chatWidth : 0 }}>
       <div className="flex-shrink-0 border-b border-gray-200 bg-white/80 backdrop-blur">
         <div className="mx-auto max-w-3xl px-6 py-4">
@@ -1038,5 +1431,6 @@ export default function App() {
         </button>
       )}
     </div>
+    </>
   );
 }
