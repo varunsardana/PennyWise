@@ -142,6 +142,91 @@ async def save_budget(request: SaveBudgetRequest, db: Session = Depends(get_db))
         )
 
 
+class UpdateBudgetRequest(BaseModel):
+    """Request to update an existing budget"""
+    category_budgets: Dict[str, float]
+    total_budget: float
+    savings_goal: Optional[float] = None
+
+
+class UpdateBudgetResponse(BaseModel):
+    """Response after updating budget"""
+    success: bool
+    message: str
+    plan: Optional[Dict[str, Any]] = None
+
+
+@router.put("/update", response_model=UpdateBudgetResponse)
+async def update_budget(request: UpdateBudgetRequest, db: Session = Depends(get_db)):
+    """
+    Update the active budget plan with new values.
+    """
+    try:
+        from receipt_story.db.tables import BudgetPlan
+        import json
+
+        # Get active budget
+        active_plan = db.query(BudgetPlan).filter(
+            BudgetPlan.is_active == True
+        ).first()
+
+        if not active_plan:
+            return UpdateBudgetResponse(
+                success=False,
+                message="No active budget plan found",
+                plan=None
+            )
+
+        # Update the plan
+        active_plan.category_budgets = json.dumps(request.category_budgets)
+        active_plan.total_budget = request.total_budget
+        if request.savings_goal is not None:
+            active_plan.savings_goal = request.savings_goal
+
+        db.commit()
+
+        return UpdateBudgetResponse(
+            success=True,
+            message="Budget updated successfully",
+            plan={
+                "id": active_plan.id,
+                "total_budget": active_plan.total_budget,
+                "category_budgets": request.category_budgets,
+                "savings_goal": active_plan.savings_goal
+            }
+        )
+
+    except Exception as e:
+        db.rollback()
+        return UpdateBudgetResponse(
+            success=False,
+            message=f"Error updating budget: {str(e)}",
+            plan=None
+        )
+
+
+@router.delete("/reset")
+async def reset_budget(db: Session = Depends(get_db)):
+    """
+    Reset/delete the active budget plan.
+    Useful for demos or starting fresh.
+    """
+    try:
+        from receipt_story.db.tables import BudgetPlan
+
+        # Deactivate all budget plans
+        db.query(BudgetPlan).filter(BudgetPlan.is_active == True).update(
+            {"is_active": False}
+        )
+        db.commit()
+
+        return {"success": True, "message": "Budget reset successfully"}
+
+    except Exception as e:
+        db.rollback()
+        return {"success": False, "message": f"Error resetting budget: {str(e)}"}
+
+
 @router.post("/refine", response_model=RefineBudgetResponse)
 async def refine_budget(request: RefineBudgetRequest, db: Session = Depends(get_db)):
     """

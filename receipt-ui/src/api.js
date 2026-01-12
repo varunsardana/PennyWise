@@ -173,3 +173,28 @@ export async function saveBudgetPlan(budgetProposal) {
   }
   return await res.json();
 }
+
+export async function resetBudget() {
+  const res = await fetch(`${API_BASE}/planning/reset`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(`Reset budget failed (${res.status})`);
+  return await res.json();
+}
+
+export async function updateBudgetPlan(categoryBudgets, totalBudget, savingsGoal = null) {
+  const res = await fetch(`${API_BASE}/planning/update`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      category_budgets: categoryBudgets,
+      total_budget: totalBudget,
+      savings_goal: savingsGoal,
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Update budget failed (${res.status}): ${text}`);
+  }
+  return await res.json();
+}
